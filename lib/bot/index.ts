@@ -1,6 +1,7 @@
 import { Telegraf, Markup } from 'telegraf';
 import { FORUM_THREADS, CALLBACKS } from './constants';
 import { SOPS } from '../templates/sops';
+import { supabase } from './supabase';
 
 export const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN!);
 
@@ -11,6 +12,17 @@ export const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN!);
 bot.command('getid', (ctx) => {
   const threadId = ctx.message.message_thread_id;
   ctx.reply(`El ID de este hilo es: ${threadId || 'No es un hilo/Topic'}`);
+});
+
+bot.command('jornada', async (ctx) => {
+  await ctx.reply('⏱️ *Control de Jornada de Trabajo*', {
+    parse_mode: 'Markdown',
+    reply_parameters: { message_id: ctx.message.message_id },
+    ...Markup.inlineKeyboard([
+      [Markup.button.callback('🟢 Iniciar Jornada', CALLBACKS.JORNADA_INICIAR)],
+      [Markup.button.callback('🔴 Finalizar Jornada', CALLBACKS.JORNADA_FINALIZAR)]
+    ])
+  });
 });
 
 bot.command('recepcion', async (ctx) => {
@@ -161,6 +173,79 @@ bot.action(CALLBACKS.LINEA_INSPECCION, (ctx) => replyInThread(ctx, SOPS.LINEA_IN
 
 bot.action(CALLBACKS.MEJORA_APERTURA, (ctx) => replyInThread(ctx, SOPS.MEJORA_APERTURA));
 bot.action(CALLBACKS.MEJORA_CIERRE, (ctx) => replyInThread(ctx, SOPS.MEJORA_CIERRE));
+
+// Acciones de Jornada
+bot.action(CALLBACKS.JORNADA_INICIAR, async (ctx) => {
+  await ctx.answerCbQuery();
+  const userId = ctx.from?.id;
+  const username = ctx.from?.first_name || 'Técnico';
+  
+  if (!userId) return;
+
+  // Verificar si ya tiene una jornada activa
+  const { data: activeJornada } = await supabase
+    .from('jornadas')
+    .select('*')
+    .eq('telegram_id', userId)
+    .eq('status', 'ACTIVO')
+    .single();
+
+  if (activeJornada) {
+    return ctx.reply(`⚠️ ${username}, ya tienes una jornada iniciada desde las ${new Date(activeJornada.started_at).toLocaleTimeString('es-VE')}.`);
+  }
+
+  // Insertar nueva jornada
+  const { error } = await supabase
+    .from('jornadas')
+    .insert([{ telegram_id: userId, username, status: 'ACTIVO' }]);
+
+  if (error) {
+    console.error(error);
+    return ctx.reply('❌ Hubo un error al iniciar tu jornada. Por favor avisa a soporte.');
+  }
+
+  const time = new Date().toLocaleTimeString('es-VE');
+  ctx.reply(`✅ *Jornada iniciada* con éxito a las ${time}.\n¡Que tengas un excelente turno, ${username}!`, { parse_mode: 'Markdown' });
+});
+
+bot.action(CALLBACKS.JORNADA_FINALIZAR, async (ctx) => {
+  await ctx.answerCbQuery();
+  const userId = ctx.from?.id;
+  const username = ctx.from?.first_name || 'Técnico';
+  
+  if (!userId) return;
+
+  // Buscar jornada activa
+  const { data: activeJornada } = await supabase
+    .from('jornadas')
+    .select('*')
+    .eq('telegram_id', userId)
+    .eq('status', 'ACTIVO')
+    .single();
+
+  if (!activeJornada) {
+    return ctx.reply(`⚠️ ${username}, no tienes ninguna jornada activa. Usa "Iniciar Jornada" primero.`);
+  }
+
+  const now = new Date();
+  
+  // Actualizar la jornada a finalizada
+  const { error } = await supabase
+    .from('jornadas')
+    .update({ ended_at: now.toISOString(), status: 'FINALIZADO' })
+    .eq('id', activeJornada.id);
+
+  if (error) {
+    return ctx.reply('❌ Hubo un error al finalizar tu jornada. Por favor avisa a soporte.');
+  }
+
+  const startTime = new Date(activeJornada.started_at);
+  const diffMs = now.getTime() - startTime.getTime();
+  const diffHrs = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffMins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+
+  ctx.reply(`🛑 *Jornada finalizada*.\n\n👤 *Técnico:* ${username}\n⏱️ *Tiempo trabajado:* ${diffHrs} horas y ${diffMins} minutos.\n\n¡Buen trabajo hoy! Descansa.`, { parse_mode: 'Markdown' });
+});
 
 // ==========================================
 // 3. MANEJO DE MEDIOS (RÁFAGAS DE FOTOS/VIDEOS)
