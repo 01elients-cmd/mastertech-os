@@ -13,21 +13,26 @@ export const SOPS = {
   // === REPUESTOS ===
   SOLICITUD_REPUESTO: `📦 SOLICITUD DE REPUESTOS
 
-• Orden: MT00-[Número]
+• Orden: [Número]
 • Vehículo: [Marca, Modelo, Año]
-• VIN / Serie: [Número de Serie]
-• Pieza Solicitada:
-[Describir pieza con número de parte si aplica]
-
-• Mecánico que solicita: [Nombre]
+• VIN / Serie: [Insertar los 17 dígitos del número de chasis]
+• Pieza Solicitada: [Nombre exacto del repuesto, lado izquierdo/derecho, delantero/trasero]
+• ¿Se requiere kit o componente único?: [Ej: Solo el balero / Kit con maza completo]
+• Mecánico que solicita: [Nombre del técnico]
 
 📸 (Debajo de este texto, adjuntar foto de la pieza dañada o del número de parte grabado si es visible).`,
 
-  COTIZACION_REPUESTO: `📄 COTIZACIÓN
+  COTIZACION_REPUESTO: `📦 COTIZACIÓN/Despacho DE REFACCIÓN
 
-• Proveedor: [Nombre]
-• Disponibilidad: [Stock / Días de entrega]
-• Costo: [Monto]`,
+• Estatus: 🟢 DISPONIBLE / 🟡 SOLICITADO
+• Marca/Calidad conseguida: [Marca del repuesto y tipo de calidad (Ej: KYB - Comercial)]
+• Proveedor: [Nombre del proveedor externo]
+• Costo Neto (Taller): $ [Precio que paga el taller]
+• Precio de Venta Sugerido: $ [Precio al cliente final con el margen del taller incluido]
+• Tiempo Estimado de Entrega: ⏱️ [Tiempo en minutos/horas o si ya está en almacén]
+📝 Nota: [Cualquier detalle relevante, ej: "Incluye los bujes de regalo" o "Garantía de 1 año"]
+
+📸 (Debajo de este texto, adjuntar foto de la pieza nueva ).`,
 
   // === OPERACIONES ===
   NUEVOS_HALLAZGOS: `🔧 Nuevos Hallazgos durante el diagnostico
