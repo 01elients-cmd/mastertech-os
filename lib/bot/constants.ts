@@ -1,11 +1,12 @@
 export const FORUM_THREADS = {
-  RECEPCION: 4,
+  RECEPCION: 9,
   REPUESTOS: 11,
-  CALIDAD: 13,
-  OPERACIONES: 15,
-  INSPECCION: 21,
-  GARANTIAS: 23,
-  INCIDENCIAS: 25,
+  OPERACIONES: 13,
+  GARANTIAS: 15,
+  PENDIENTES: 23,
+  CALIDAD: 13, // TODO: Update with real ID
+  INSPECCION: 21, // TODO: Update with real ID
+  INCIDENCIAS: 25, // TODO: Update with real ID
 } as const;
 
 export const CALLBACKS = {
