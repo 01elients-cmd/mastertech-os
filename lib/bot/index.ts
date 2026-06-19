@@ -204,7 +204,7 @@ bot.action(CALLBACKS.JORNADA_INICIAR, async (ctx) => {
     return ctx.reply('❌ Hubo un error al iniciar tu jornada. Por favor avisa a soporte.');
   }
 
-  const time = new Date().toLocaleTimeString('es-VE');
+  const time = new Date().toLocaleTimeString('es-VE', { timeZone: 'America/Caracas' });
   ctx.reply(`✅ *Jornada iniciada* con éxito a las ${time}.\n¡Que tengas un excelente turno, ${username}!`, { parse_mode: 'Markdown' });
 });
 
