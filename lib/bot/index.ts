@@ -14,18 +14,12 @@ bot.command('getid', (ctx) => {
 });
 
 bot.command('recepcion', async (ctx) => {
-  const threadId = ctx.message.message_thread_id;
-  
-  if (threadId !== FORUM_THREADS.RECEPCION) {
-    return ctx.reply('⚠️ Por favor usa este comando en el hilo de Recepción.', { 
-      reply_parameters: { message_id: ctx.message.message_id }
-    });
-  }
+  if (ctx.message.message_thread_id !== FORUM_THREADS.RECEPCION) return;
 
-  await ctx.reply('👋 Bienvenido a Recepción. Selecciona una acción:', {
+  await ctx.reply('👋 Bienvenido al sistema de MasterTech. ¿En qué puedo ayudarte hoy?', {
     reply_parameters: { message_id: ctx.message.message_id },
     ...Markup.inlineKeyboard([
-      Markup.button.callback('🚗 NUEVO INGRESO', CALLBACKS.NUEVO_INGRESO)
+      Markup.button.callback('🚗 REPORTE...', CALLBACKS.NUEVO_INGRESO)
     ])
   });
 });
@@ -33,24 +27,64 @@ bot.command('recepcion', async (ctx) => {
 bot.command('repuestos', async (ctx) => {
   if (ctx.message.message_thread_id !== FORUM_THREADS.REPUESTOS) return;
 
-  await ctx.reply('📦 Departamento de Repuestos. Selecciona una acción:', {
+  await ctx.reply('Bienvenido al sistema de MasterTech. ¿En qué puedo ayudarte hoy?', {
     reply_parameters: { message_id: ctx.message.message_id },
     ...Markup.inlineKeyboard([
-      Markup.button.callback('📦 SOLICITUD', CALLBACKS.SOLICITUD_REPUESTO),
-      Markup.button.callback('📄 COTIZACIÓN', CALLBACKS.COTIZACION_REPUESTO)
+      [
+        Markup.button.callback('📦 SOLICITUD', CALLBACKS.SOLICITUD_REPUESTO),
+        Markup.button.callback('📄 COTIZACIÓN', CALLBACKS.COTIZACION_REPUESTO)
+      ]
     ])
   });
 });
 
-bot.command('servicios', async (ctx) => {
+bot.command('operacion', async (ctx) => {
   if (ctx.message.message_thread_id !== FORUM_THREADS.OPERACIONES) return;
 
-  await ctx.reply('🔧 Operaciones de Taller:', {
+  await ctx.reply('Bienvenido al sistema de MasterTech. ¿En qué puedo ayudarte hoy?', {
     reply_parameters: { message_id: ctx.message.message_id },
     ...Markup.inlineKeyboard([
-      Markup.button.callback('Nuevos Hallazgos', CALLBACKS.NUEVOS_HALLAZGOS),
-      Markup.button.callback('Listo/Parcial', CALLBACKS.LISTO_PARCIAL),
-      Markup.button.callback('Estatus', CALLBACKS.ESTATUS_OP)
+      [Markup.button.callback('🔧 Nuevos Hallazgos', CALLBACKS.NUEVOS_HALLAZGOS)],
+      [Markup.button.callback('⚡ Listo/Parcial', CALLBACKS.LISTO_PARCIAL)],
+      [Markup.button.callback('💰 Estatus', CALLBACKS.ESTATUS_OP)]
+    ])
+  });
+});
+
+bot.command('garantia', async (ctx) => {
+  if (ctx.message.message_thread_id !== FORUM_THREADS.GARANTIAS) return;
+
+  await ctx.reply('Bienvenido al sistema de MasterTech. ¿En qué puedo ayudarte hoy?', {
+    reply_parameters: { message_id: ctx.message.message_id },
+    ...Markup.inlineKeyboard([
+      [
+        Markup.button.callback('🧧 GARANTÍA', CALLBACKS.GARANTIA_REINGRESO),
+        Markup.button.callback('⚠️ RETRABAJO', CALLBACKS.GARANTIA_RETRABAJO)
+      ]
+    ])
+  });
+});
+
+bot.command('pendientes', async (ctx) => {
+  if (ctx.message.message_thread_id !== FORUM_THREADS.PENDIENTES) return;
+
+  await ctx.reply('Bienvenido al sistema de MasterTech. ¿En qué puedo ayudarte hoy?', {
+    reply_parameters: { message_id: ctx.message.message_id },
+    ...Markup.inlineKeyboard([
+      [Markup.button.callback('⚙️ CONTROL DE POST-VENTA Y LOGÍSTICA', CALLBACKS.PENDIENTES_POSTVENTA)],
+      [Markup.button.callback('📞 SEGUIMIENTO DE LLAMADAS Y CITA', CALLBACKS.PENDIENTES_SEGUIMIENTO)]
+    ])
+  });
+});
+
+bot.command('incidencias', async (ctx) => {
+  if (ctx.message.message_thread_id !== FORUM_THREADS.INCIDENCIAS) return;
+
+  await ctx.reply('Bienvenido al sistema de MasterTech. ¿En qué puedo ayudarte hoy?', {
+    reply_parameters: { message_id: ctx.message.message_id },
+    ...Markup.inlineKeyboard([
+      [Markup.button.callback('🔴 1. Reporte (Apertura)', CALLBACKS.INCIDENCIA_APERTURA)],
+      [Markup.button.callback('🟢 2. Resolución (Cierre)', CALLBACKS.INCIDENCIA_CIERRE)]
     ])
   });
 });
@@ -58,7 +92,7 @@ bot.command('servicios', async (ctx) => {
 bot.command('calidad', async (ctx) => {
   if (ctx.message.message_thread_id !== FORUM_THREADS.CALIDAD) return;
 
-  await ctx.reply('🔍 Control de Calidad:', {
+  await ctx.reply('Bienvenido al sistema de MasterTech. ¿En qué puedo ayudarte hoy?', {
     reply_parameters: { message_id: ctx.message.message_id },
     ...Markup.inlineKeyboard([
       Markup.button.callback('📋 FORMATO QC', CALLBACKS.FORMATO_QC)
@@ -66,6 +100,28 @@ bot.command('calidad', async (ctx) => {
   });
 });
 
+bot.command('inspeccion', async (ctx) => {
+  if (ctx.message.message_thread_id !== FORUM_THREADS.INSPECCION) return;
+
+  await ctx.reply('Bienvenido al sistema de MasterTech. ¿En qué puedo ayudarte hoy?', {
+    reply_parameters: { message_id: ctx.message.message_id },
+    ...Markup.inlineKeyboard([
+      Markup.button.callback('🔍 Linea Inspeccion', CALLBACKS.LINEA_INSPECCION)
+    ])
+  });
+});
+
+bot.command('mejora', async (ctx) => {
+  if (ctx.message.message_thread_id !== FORUM_THREADS.MEJORA) return;
+
+  await ctx.reply('Bienvenido al sistema de MasterTech. ¿En qué puedo ayudarte hoy?', {
+    reply_parameters: { message_id: ctx.message.message_id },
+    ...Markup.inlineKeyboard([
+      [Markup.button.callback('💡 Propuesta de Mejora (Apertura)', CALLBACKS.MEJORA_APERTURA)],
+      [Markup.button.callback('🚀 Implementación y Resultado (Cierre)', CALLBACKS.MEJORA_CIERRE)]
+    ])
+  });
+});
 
 // ==========================================
 // 2. MANEJADOR DE ACCIONES (BOTONES)
@@ -75,15 +131,36 @@ const replyInThread = async (ctx: any, template: string) => {
   await ctx.answerCbQuery();
   const threadId = ctx.callbackQuery.message?.message_thread_id;
   await ctx.reply(template, { 
-    parse_mode: 'Markdown',
+    parse_mode: 'HTML', // Cambiado a HTML para evitar problemas con Markdown
     message_thread_id: threadId 
   });
 };
 
+// Vinculación de botones con sus plantillas
 bot.action(CALLBACKS.NUEVO_INGRESO, (ctx) => replyInThread(ctx, SOPS.NUEVO_INGRESO));
-bot.action(CALLBACKS.SOLICITUD_REPUESTO, (ctx) => replyInThread(ctx, SOPS.SOLICITUD_REPUESTOS));
+
+bot.action(CALLBACKS.SOLICITUD_REPUESTO, (ctx) => replyInThread(ctx, SOPS.SOLICITUD_REPUESTO));
+bot.action(CALLBACKS.COTIZACION_REPUESTO, (ctx) => replyInThread(ctx, SOPS.COTIZACION_REPUESTO));
+
+bot.action(CALLBACKS.NUEVOS_HALLAZGOS, (ctx) => replyInThread(ctx, SOPS.NUEVOS_HALLAZGOS));
+bot.action(CALLBACKS.LISTO_PARCIAL, (ctx) => replyInThread(ctx, SOPS.LISTO_PARCIAL));
+bot.action(CALLBACKS.ESTATUS_OP, (ctx) => replyInThread(ctx, SOPS.ESTATUS_OP));
+
+bot.action(CALLBACKS.GARANTIA_REINGRESO, (ctx) => replyInThread(ctx, SOPS.GARANTIA_REINGRESO));
+bot.action(CALLBACKS.GARANTIA_RETRABAJO, (ctx) => replyInThread(ctx, SOPS.GARANTIA_RETRABAJO));
+
+bot.action(CALLBACKS.PENDIENTES_POSTVENTA, (ctx) => replyInThread(ctx, SOPS.PENDIENTES_POSTVENTA));
+bot.action(CALLBACKS.PENDIENTES_SEGUIMIENTO, (ctx) => replyInThread(ctx, SOPS.PENDIENTES_SEGUIMIENTO));
+
+bot.action(CALLBACKS.INCIDENCIA_APERTURA, (ctx) => replyInThread(ctx, SOPS.INCIDENCIA_APERTURA));
+bot.action(CALLBACKS.INCIDENCIA_CIERRE, (ctx) => replyInThread(ctx, SOPS.INCIDENCIA_CIERRE));
+
 bot.action(CALLBACKS.FORMATO_QC, (ctx) => replyInThread(ctx, SOPS.CONTROL_CALIDAD));
 
+bot.action(CALLBACKS.LINEA_INSPECCION, (ctx) => replyInThread(ctx, SOPS.LINEA_INSPECCION));
+
+bot.action(CALLBACKS.MEJORA_APERTURA, (ctx) => replyInThread(ctx, SOPS.MEJORA_APERTURA));
+bot.action(CALLBACKS.MEJORA_CIERRE, (ctx) => replyInThread(ctx, SOPS.MEJORA_CIERRE));
 
 // ==========================================
 // 3. MANEJO DE MEDIOS (RÁFAGAS DE FOTOS/VIDEOS)
