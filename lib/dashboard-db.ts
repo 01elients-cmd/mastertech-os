@@ -229,12 +229,30 @@ export function getSupabaseClient() {
 
 // Hybrid operation functions helper
 export async function dbGetTemplates(): Promise<SopTemplate[]> {
+  const defaults = getInitialData().sops_templates;
   const supabase = getSupabaseClient();
+  
   if (supabase) {
     try {
       const { data, error } = await supabase.from('sops_templates').select('*');
-      if (!error && data && data.length > 0) {
-        return data as SopTemplate[];
+      if (!error && data) {
+        // Merge Supabase templates on top of default ones
+        const remoteTemplates = data as SopTemplate[];
+        const merged = defaults.map(def => {
+          const found = remoteTemplates.find(r => r.key === def.key);
+          return found ? found : def;
+        });
+        
+        // Append any extra keys defined in Supabase that are not in defaults
+        remoteTemplates.forEach(r => {
+          if (!merged.some(m => m.key === r.key)) {
+            merged.push(r);
+          }
+        });
+        
+        return merged;
+      } else if (error) {
+        console.error('Supabase get templates error:', error.message);
       }
     } catch (e) {
       console.warn('Supabase templates fetch failed, falling back to local file:', e);
