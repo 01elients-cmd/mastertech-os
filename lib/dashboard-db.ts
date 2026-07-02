@@ -358,7 +358,7 @@ export async function dbUpsertJornada(jornada: Jornada): Promise<Jornada> {
 
   // Fallback to local
   const db = readLocalDB();
-  const index = db.jornadas.findIndex((j) => String(j.id) === String(j.id));
+  const index = db.jornadas.findIndex((j) => String(j.id) === String(jornada.id));
   if (index >= 0) {
     db.jornadas[index] = { ...jornada };
   } else {

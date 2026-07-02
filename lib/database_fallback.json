@@ -1,0 +1,200 @@
+{
+  "jornadas": [
+    {
+      "id": "jor-1",
+      "telegram_id": 11223344,
+      "username": "Carlos Pérez",
+      "started_at": "2026-07-01T06:33:06.910Z",
+      "ended_at": "2026-07-01T14:33:06.910Z",
+      "status": "FINALIZADO"
+    },
+    {
+      "id": "jor-2",
+      "telegram_id": 99887766,
+      "username": "José Gómez",
+      "started_at": "2026-07-02T10:33:06.910Z",
+      "ended_at": null,
+      "status": "ACTIVO"
+    },
+    {
+      "id": "jor-3",
+      "telegram_id": 55443322,
+      "username": "Marcos Altuve",
+      "started_at": "2026-07-02T11:33:06.910Z",
+      "ended_at": null,
+      "status": "ACTIVO"
+    }
+  ],
+  "sops_records": [
+    {
+      "id": "rec-1",
+      "category": "recepcion",
+      "template_key": "NUEVO_INGRESO",
+      "title": "OT #5201 - Toyota Corolla 2018",
+      "client_name": "Alejandro Mendoza",
+      "vehicle": "Toyota Corolla 2018",
+      "plate": "AA890BB",
+      "creator": "Carlos Pérez",
+      "content": "🚗 NUEVO INGRESO\n\n• Vehículo: Toyota Corolla 2018, Gris, Placa AA890BB\n• Cliente: Alejandro Mendoza\n• Contacto: +58 412-5551234\n• Falla Reportada: Ruido metálico al cruzar a la derecha y vibración en el volante a más de 80km/h\n• Observaciones general: Golpe leve en el parachoques delantero izquierdo. Caucho delantero derecho desgastado irregularmente en la cara interna.\n• Evidencia: Fotos cargadas en el canal. Odómetro marca 115,420 km. AC enciende correctamente. Cluster sin códigos activos.",
+      "status": "Completado",
+      "created_at": "2026-06-28T14:33:06.910Z",
+      "updated_at": "2026-06-28T14:33:06.910Z"
+    },
+    {
+      "id": "rec-2",
+      "category": "repuestos",
+      "template_key": "SOLICITUD_REPUESTO",
+      "title": "OT #5201 - Mangueta y Amortiguadores",
+      "client_name": "Alejandro Mendoza",
+      "vehicle": "Toyota Corolla 2018",
+      "plate": "AA890BB",
+      "creator": "José Gómez",
+      "content": "📦 SOLICITUD DE REPUESTOS\n\n• Orden: 5201\n• Vehículo: Toyota Corolla 2018\n• VIN / Serie: 9BRBD48398X004512\n• Pieza Solicitada: Amortiguadores delanteros (Juego de 2) y Muela/Mangueta de dirección derecha\n• ¿Se requiere kit o componente único?: Kit con bases de amortiguador e isoladores.\n• Mecánico que solicita: José Gómez\n\n📸 Fotos de bases agrietadas y amortiguador derecho botando fluido adjuntadas al canal.",
+      "status": "Aprobado",
+      "created_at": "2026-06-29T14:33:06.910Z",
+      "updated_at": "2026-06-29T14:33:06.910Z"
+    },
+    {
+      "id": "rec-3",
+      "category": "operaciones",
+      "template_key": "NUEVOS_HALLAZGOS",
+      "title": "OT #5201 - Tripeta y guardapolvo roto",
+      "client_name": "Alejandro Mendoza",
+      "vehicle": "Toyota Corolla 2018",
+      "plate": "AA890BB",
+      "creator": "José Gómez",
+      "content": "🔧 Nuevos Hallazgos durante el diagnostico\n\nORDEN #5201 - Toyota Corolla 2018: Al desmontar la muela derecha, se detectó el guardapolvo de la triceta roto y pérdida de grasa grafitada. La triceta presenta desgaste interno severo, lo cual causa el ruido metálico al cruzar. Requiere reemplazo de punta de eje/triceta.",
+      "status": "En proceso",
+      "created_at": "2026-06-30T14:33:06.910Z",
+      "updated_at": "2026-06-30T14:33:06.910Z"
+    },
+    {
+      "id": "rec-4",
+      "category": "incidencias",
+      "template_key": "INCIDENCIA_APERTURA",
+      "title": "OT #5198 - Repuesto de año incorrecto",
+      "client_name": "Mariana Silva",
+      "vehicle": "Honda Civic 2015",
+      "plate": "XX123YY",
+      "creator": "Alejandro Asesor",
+      "content": "🔴 1. Reporte de Incidencia (Apertura)\n\n#Incidencia_Apertura\n👤 Detecta: Alejandro Asesor\n🏢 Área_Afectada: Repuestos / Taller\n🎯 Origen_Problema: Proveedor / Repuestos\n🛠 Orden (OT): 5198\n🚀 Tipo: Retraso por parte equivocada\n🔥 Gravedad: Media\n📝 Detalle: El proveedor externo envió pastillas de freno delanteras para Civic 2012-2013, las cuales son más pequeñas que las del Civic 2015. El vehículo quedó montado en el elevador bloqueando la bahía 2 por 3 horas extra hasta recibir el repuesto correcto.",
+      "status": "Pendiente",
+      "created_at": "2026-07-01T14:33:06.910Z",
+      "updated_at": "2026-07-01T14:33:06.910Z"
+    }
+  ],
+  "sops_templates": [
+    {
+      "key": "NUEVO_INGRESO",
+      "title": "🚗 Nuevo Ingreso",
+      "content": "🚗 NUEVO INGRESO\n\n• Vehículo: [Marca, Modelo, Año, Placa]\n• Cliente: [Nombre del Cliente]\n• Contacto: (si se requiere)\n• Falla Reportada: [Breve descripción de lo que el cliente dice sentir/escuchar]\n• Observaciones general: (fallos, golpes, sonidos no reportados por el cliente)\n• Evidencia: enviar fotos Exterior (fotos 4 laterales, 4 esquinas, 5 neumaticos, maletero techo, motor) interior (parte trasera, parte delantera, tablero completo, guanteras, Odometro con km)\n1 video corto de funcionamiento eléctrico ( cluster, a/c, radio/táctil, cámara, cepillos limpia parabrisas, luces internas externas, ventanas, retrovisores, otros accesorios)",
+      "category": "recepcion",
+      "updated_at": "2026-07-02T14:33:06.909Z"
+    },
+    {
+      "key": "SOLICITUD_REPUESTO",
+      "title": "📦 Solicitud de Repuesto",
+      "content": "📦 SOLICITUD DE REPUESTOS\n\n• Orden: [Número]\n• Vehículo: [Marca, Modelo, Año]\n• VIN / Serie: [Insertar los 17 dígitos del número de chasis]\n• Pieza Solicitada: [Nombre exacto del repuesto, lado izquierdo/derecho, delantero/trasero]\n• ¿Se requiere kit o componente único?: [Ej: Solo el balero / Kit con maza completo]\n• Mecánico que solicita: [Nombre del técnico]\n\n📸 (Debajo de este texto, adjuntar foto de la pieza dañada o del número de parte grabado si es visible).",
+      "category": "repuestos",
+      "updated_at": "2026-07-02T14:33:06.909Z"
+    },
+    {
+      "key": "COTIZACION_REPUESTO",
+      "title": "📄 Cotización/Despacho de Refacción",
+      "content": "📦 COTIZACIÓN/Despacho DE REFACCIÓN\n\n• Estatus: 🟢 DISPONIBLE / 🟡 SOLICITADO\n• Marca/Calidad conseguida: [Marca del repuesto y tipo de calidad (Ej: KYB - Comercial)]\n• Proveedor: [Nombre del proveedor externo]\n• Costo Neto (Taller): $ [Precio que paga el taller]\n• Precio de Venta Sugerido: $ [Precio al cliente final con el margen del taller incluido]\n• Tiempo Estimado de Entrega: ⏱️ [Tiempo en minutos/horas o si ya está en almacén]\n📝 Nota: [Cualquier detalle relevante, ej: \"Incluye los bujes de regalo\" o \"Garantía de 1 año\"]\n\n📸 (Debajo de este texto, adjuntar foto de la pieza nueva ).",
+      "category": "repuestos",
+      "updated_at": "2026-07-02T14:33:06.910Z"
+    },
+    {
+      "key": "NUEVOS_HALLAZGOS",
+      "title": "🔍 Nuevos Hallazgos en Diagnóstico",
+      "content": "🔧 Nuevos Hallazgos durante el diagnostico\n\n[NÚMERO DE ORDEN] - [MODELO DEL AUTO]\nEjemplo: 🔧 ORDEN #4120 - Nissan Versa 2020: en proceso de diagnostico, pero se le detecto un bote de refrigerante por la manguera\n(Debajo de este texto, enviar el video corto o de fotos)",
+      "category": "operaciones",
+      "updated_at": "2026-07-02T14:33:06.910Z"
+    },
+    {
+      "key": "LISTO_PARCIAL",
+      "title": "⚡ Diagnóstico Listo/Parcial",
+      "content": "🔧 DIAGNÓSTICO LISTO/PARCIAL\n\n• Orden: [Número]\n• Mecánico Asignado: [Nombre del técnico]\n• Falla Confirmada: [Detalle técnico de la pieza dañada]\n• Fecha/Hora Promesa de Entrega: [Día y Hora aproximada teniendo los repuestos solicitados]\n• Estatus: [qdo en espera de aprobación, espera de repuesto]\n• Evidencia: (Debajo de este texto, enviar el video corto o ráfaga de fotos)",
+      "category": "operaciones",
+      "updated_at": "2026-07-02T14:33:06.910Z"
+    },
+    {
+      "key": "ESTATUS_OP",
+      "title": "💰 Estatus de Cotización",
+      "content": "💰 Estatus de cotización\n\n• Orden : [Número de Orden]\n• Vehículo: [Marca, Modelo]\n• Estatus: 🟢 AUTORIZADO TOTAL / 🟡 AUTORIZADO PARCIAL / 🔴 DECLINADO\n⚙️ Trabajos a Realizar:\n• [Escribir solo lo que se va a reparar. Ej: entonacion completa y cambio de pastillas delanteras]\n\n⏰ Horas aprobadas por reparación: (Indicado por ARI)\n\n❌ Trabajos Rechazados por el Cliente:\n• [Escribir lo que no se autorizó. Ej: Rectificación de discos traseros (Cliente firma responsiva)]\n\nFecha/Hora Promesa de Entrega: [Día y Hora aproximada]",
+      "category": "operaciones",
+      "updated_at": "2026-07-02T14:33:06.910Z"
+    },
+    {
+      "key": "GARANTIA_REINGRESO",
+      "title": "🧧 Reingreso por Garantía",
+      "content": "🧧 REINGRESO POR GARANTÍA\n\n• Orden Original: [Número de la orden donde pagó el servicio original]\n• Vehículo: [Marca, Modelo, Año, Placa]\n• Cliente: [Nombre del Cliente]\n• Trabajo Anterior Realizado: [Ej: cambio de estopera delantera cigueñal...]\n• Queja Actual del Cliente: [Describir exactamente lo que dice el cliente]\n• Estatus Visual Inicial: [Se apreció bote...]\n• Técnico que reparó originalmente: [Nombre del mecánico]\n\n📸 (Adjuntar foto del kilometraje actual en el tablero para comprobar que esté dentro del periodo de garantía y video/audio del síntoma si es posible).",
+      "category": "garantias",
+      "updated_at": "2026-07-02T14:33:06.910Z"
+    },
+    {
+      "key": "GARANTIA_RETRABAJO",
+      "title": "⚠️ Reingreso por Retrabajo",
+      "content": "⚠️ REINGRESO POR RETRABAJO\n\n• Orden Previa: [Número de orden del servicio anterior]\n• Vehículo: [Marca, Modelo, Año]\n• Cliente: [Nombre del Cliente]\n• Diagnóstico / Trabajo Anterior: [Ej: Se cambió estopera delantera por fuga...]\n• Falla Actual Detectada: [Ej: Sigue goteando aceite, pero ahora es por la estopera trasera]\n• ¿Por qué es Retrabajo y no Garantía?: [Explicación técnica corta]\n• Nivel de Molestia del Cliente: 🟥 ALTO (Exige solución hoy) / 🟨 MEDIO (Entiende la situación pero pide consideración)\n\n📸 (Adjuntar video o foto detallada donde se vea claramente la pieza anterior impecable y la pieza nueva fallando...).",
+      "category": "garantias",
+      "updated_at": "2026-07-02T14:33:06.910Z"
+    },
+    {
+      "key": "PENDIENTES_POSTVENTA",
+      "title": "⚙️ Control de Post-Venta y Logística",
+      "content": "⚙️ CONTROL DE POST-VENTA Y LOGÍSTICA\nNº Orden / Historial: #_________\nCliente: [Nombre y Teléfono]\nVehículo: [Marca, Modelo, Año y Placa]\n🔧 1. DIAGNÓSTICO Y SERVICIO PENDIENTE: [Ej: Cambio de embrague...]\n\n📦 2. CONTROL DE REPUESTOS (LOGÍSTICA)\nLista de piezas requeridas:\n[Pieza ] - Cantidad: [ ]\n\nEstado actual de los repuestos: (aplicar el semaforo)",
+      "category": "pendientes",
+      "updated_at": "2026-07-02T14:33:06.910Z"
+    },
+    {
+      "key": "PENDIENTES_SEGUIMIENTO",
+      "title": "📞 Seguimiento de Llamadas y Cita",
+      "content": "📞 3. SEGUIMIENTO DE LLAMADAS Y CITA\nHistorial de llamadas de post-venta:\nLlamada 1 (Fecha: / / ): [Ej: No contestó, se envió WhatsApp]\nLlamada 2 (Fecha: / / ): [Ej: Cliente aprueba, pero pide agendar para la quincena]\nEstado final del servicio:\n[ ] Pendiente de re-contactar.\n[ ] Cita confirmada para el día: / / ___ a las : hrs.\n[ ] Rechazado por el cliente (Motivo: ______________________)",
+      "category": "pendientes",
+      "updated_at": "2026-07-02T14:33:06.910Z"
+    },
+    {
+      "key": "INCIDENCIA_APERTURA",
+      "title": "🔴 Reporte de Incidencia (Apertura)",
+      "content": "🔴 1. Reporte de Incidencia (Apertura)\n\n#Incidencia_Apertura\n👤 Detecta: [Nombre]\n🏢 Área_Afectada: [Servicio / Repuestos / Taller / Lavado]\n🎯 Origen_Problema: [Asesor / Repuestos / Técnico / Proveedor / Cliente]\n🛠 Orden (OT): [Número de Orden]\n🚀 Tipo: [Elegir de la lista estandarizada abajo]\n🔥 Gravedad: [Baja / Media / Crítica]\n📝 Detalle: [Ej: Repuestos entregó pastillas de freno del año incorrecto...]",
+      "category": "incidencias",
+      "updated_at": "2026-07-02T14:33:06.910Z"
+    },
+    {
+      "key": "INCIDENCIA_CIERRE",
+      "title": "🟢 Resolución de Incidencia (Cierre)",
+      "content": "🟢 2. Resolución de Incidencia (Cierre)\n\n#Incidencia_Cierre\n👤 Resuelve: [Nombre]\n✅ Solución: [Ej: Se cambiaron las pastillas por el código correcto]\n⏱ Tiempo_Resolucion: [Ej: 45 min / 3 horas - Tiempo que el proceso estuvo frenado]\n💰 Costo_Extra: [Monto si hubo daños/fletes urgentes, o 0]",
+      "category": "incidencias",
+      "updated_at": "2026-07-02T14:33:06.910Z"
+    },
+    {
+      "key": "CONTROL_CALIDAD",
+      "title": "📋 Control de Calidad QC",
+      "content": "marcar con ✅ o ❌ cada punto\n\n#️⃣ Orden de servicio\n🚗 Vehículo: [Marca, Modelo]\n\n🔷 1. CUMPLIMIENTO DE SERVICIO\n[ ] Se resolvió la falla descrita por el cliente al momento de ingresar el vehículo?\n[ ] Quedó algo pendiente para post venta o próximos servicios y fue anotado en su respectivo chat?\n[ ] Reseteo de luz de servicio realizada (si aplica)\n[ ] Realizo el escaneo pre entrega?\n\n🔷 2. ASPECTO EXTERIOR\n[ ] Lavado de carrocería y aspirado completo con ambientador? (consultar antes) si no se lava se debe realizar limpieza 🧼\n[ ] Cristales limpios (sin marcas de dedos o grasa) 🧽\n[ ] Luces operativas (altas, bajas, cruce, freno y reversa) 💡\n[ ] Inspección visual (sin Rayones o golpes nuevos post-taller) 🔍\n\n🔷 3. ASPECTO INTERIOR\n[ ] Retiro de plásticos protectores (asiento, volante, pomo) 🗑️\n[ ] Tablero limpio y sin restos de herramientas/materiales 🧹\n[ ] Radio y aire acondicionado en los valores iniciales 📻\n[ ] Reloj del vehículo en hora correcta ⏰\n\n🔷 4. MECÁNICA Y SEGURIDAD\n[ ] Revisión y apriete de batería y Borners\n[ ] Niveles de fluidos verificados (aceite, agua, frenos) 🛢️\n[ ] Presión de neumáticos correcta (¡no olvidar el de repuesto!) ⚙️\n[ ] Torque de tuercas de cauchos verificado (si se desmontaron) 🔧\n[ ] Ningún testigo (luz de falla) encendido en el tablero ⚠️\n[ ] Grapas de carrocería completas\n[ ] Flanchones instalados? (si aplica)\n[ ] Embellecedor de motor instalado? (si aplica)\n[ ] Frenos 100% funcionales?\n[ ] Prueba de ruta finalizada (sin ruidos extraños ni anomalías) 🛣️\n\n🔷 5. DETALLES FINALES\n[ ] Repuestos viejos/reemplazados listos en el maletero 📦\n[ ] Llaves del vehículo limpias y desinfectadas\n\n📢 DICTAMEN FINAL:\n[ ] Vehículo listo para entrega?\n⏱️ Hora de finalización:",
+      "category": "calidad",
+      "updated_at": "2026-07-02T14:33:06.910Z"
+    },
+    {
+      "key": "LINEA_INSPECCION",
+      "title": "🔍 Ficha de Inspección",
+      "content": "( 🟢 Bueno / 🟡 Requiere Atención Pronto / 🔴 Urgente - Cambio Inmediato )\n\n🚗 DATOS DEL VEHÍCULO\nCliente: [Nombre Completo]\nTeléfono: [Número]\nVehículo: [Marca, Modelo y Año]\nPlacas: [Número]\nKilometraje: [Km o Millas]\nVin:[Número]\n\n1. Sistema de Motor y Fluidos\n2. Informe de escaneo\n3. Frenos y Suspensión\n4. Sistema Eléctrico\n\n⚠️ DIAGNÓSTICO FINAL Y RECOMENDACIONES:\n\n📸Enviar testigos fotográficos y videos explicando en cada uno y detallado",
+      "category": "inspeccion",
+      "updated_at": "2026-07-02T14:36:52.294Z"
+    },
+    {
+      "key": "MEJORA_APERTURA",
+      "title": "💡 Propuesta de Mejora (Apertura)",
+      "content": "💡 1. Propuesta de Mejora (Apertura)\nLa llena cualquier empleado que detecte una oportunidad para optimizar el taller, ahorrar dinero o capacitar al equipo.\n\n#Idea_Propuesta\n👤 Propone: [Nombre]\n🏢 Área: [Servicio / Repuestos / Taller / Lavado / Administración]\n🎯 Enfoque: [Elegir de la lista estandarizada abajo]\n💡 La Idea: [Ej: Fabricar un soporte móvil para las pistolas de impacto y así no perder tiempo buscándolas entre bahías]\n🚀 Beneficio_Esperado: [Ej: Ahorrar 10 min por cada cambio de neumáticos y cuidar la herramienta]\n🛠️ Recursos_Necesarios: [Ej: Retazos de metal de desecho y 1 hora del soldador / Compra de un software]",
+      "category": "mejora",
+      "updated_at": "2026-07-02T14:33:06.910Z"
+    },
+    {
+      "key": "MEJORA_CIERRE",
+      "title": "🚀 Implementación de Mejora (Cierre)",
+      "content": "🚀 2. Implementación y Resultado (Cierre)\nSe envía respondiendo a la propuesta original tras evaluar o ejecutar la idea para medir su impacto real.\n\n#Idea_Evaluacion\n👤 Revisa: [Nombre del Gerente o Líder]\n🚦 Estado: [Aprobada_Implementada / En_Pruebas / Rechazada]\n📅 Fecha_Inicio: [DD/MM/AAAA]\n📈 Impacto_Real: [Ej: Se redujo el tiempo muerto en bahía 3 / Cero pérdidas de dados este mes]\n🏆 Puntos_Crecimiento: [Puntaje del 1 al 10 para el perfil del empleado]",
+      "category": "mejora",
+      "updated_at": "2026-07-02T14:33:06.910Z"
+    }
+  ]
+}
