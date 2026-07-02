@@ -2,8 +2,9 @@ import { Telegraf, Markup } from 'telegraf';
 import { FORUM_THREADS, CALLBACKS } from './constants';
 import { SOPS } from '../templates/sops';
 import { supabase } from './supabase';
+import { dbGetTemplates } from '../dashboard-db';
 
-export const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN!);
+export const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN || '123456789:PlaceholderToken');
 
 // ==========================================
 // 1. LISTENERS DE COMANDOS POR HILOS
@@ -139,40 +140,51 @@ bot.command('mejora', async (ctx) => {
 // 2. MANEJADOR DE ACCIONES (BOTONES)
 // ==========================================
 
-const replyInThread = async (ctx: any, template: string) => {
+const replyInThread = async (ctx: any, callbackKey: string) => {
   await ctx.answerCbQuery();
   const threadId = ctx.callbackQuery.message?.message_thread_id;
-  await ctx.reply(template, { 
+  
+  let templateContent = '';
+  try {
+    const templates = await dbGetTemplates();
+    const found = templates.find((t) => t.key === callbackKey);
+    templateContent = found ? found.content : (SOPS[callbackKey as keyof typeof SOPS] || 'Falta plantilla');
+  } catch (err) {
+    console.error(`Error loading dynamic template for key ${callbackKey}:`, err);
+    templateContent = SOPS[callbackKey as keyof typeof SOPS] || 'Error al cargar plantilla';
+  }
+
+  await ctx.reply(templateContent, { 
     parse_mode: 'HTML', // Cambiado a HTML para evitar problemas con Markdown
     message_thread_id: threadId 
   });
 };
 
 // Vinculación de botones con sus plantillas
-bot.action(CALLBACKS.NUEVO_INGRESO, (ctx) => replyInThread(ctx, SOPS.NUEVO_INGRESO));
+bot.action(CALLBACKS.NUEVO_INGRESO, (ctx) => replyInThread(ctx, 'NUEVO_INGRESO'));
 
-bot.action(CALLBACKS.SOLICITUD_REPUESTO, (ctx) => replyInThread(ctx, SOPS.SOLICITUD_REPUESTO));
-bot.action(CALLBACKS.COTIZACION_REPUESTO, (ctx) => replyInThread(ctx, SOPS.COTIZACION_REPUESTO));
+bot.action(CALLBACKS.SOLICITUD_REPUESTO, (ctx) => replyInThread(ctx, 'SOLICITUD_REPUESTO'));
+bot.action(CALLBACKS.COTIZACION_REPUESTO, (ctx) => replyInThread(ctx, 'COTIZACION_REPUESTO'));
 
-bot.action(CALLBACKS.NUEVOS_HALLAZGOS, (ctx) => replyInThread(ctx, SOPS.NUEVOS_HALLAZGOS));
-bot.action(CALLBACKS.LISTO_PARCIAL, (ctx) => replyInThread(ctx, SOPS.LISTO_PARCIAL));
-bot.action(CALLBACKS.ESTATUS_OP, (ctx) => replyInThread(ctx, SOPS.ESTATUS_OP));
+bot.action(CALLBACKS.NUEVOS_HALLAZGOS, (ctx) => replyInThread(ctx, 'NUEVOS_HALLAZGOS'));
+bot.action(CALLBACKS.LISTO_PARCIAL, (ctx) => replyInThread(ctx, 'LISTO_PARCIAL'));
+bot.action(CALLBACKS.ESTATUS_OP, (ctx) => replyInThread(ctx, 'ESTATUS_OP'));
 
-bot.action(CALLBACKS.GARANTIA_REINGRESO, (ctx) => replyInThread(ctx, SOPS.GARANTIA_REINGRESO));
-bot.action(CALLBACKS.GARANTIA_RETRABAJO, (ctx) => replyInThread(ctx, SOPS.GARANTIA_RETRABAJO));
+bot.action(CALLBACKS.GARANTIA_REINGRESO, (ctx) => replyInThread(ctx, 'GARANTIA_REINGRESO'));
+bot.action(CALLBACKS.GARANTIA_RETRABAJO, (ctx) => replyInThread(ctx, 'GARANTIA_RETRABAJO'));
 
-bot.action(CALLBACKS.PENDIENTES_POSTVENTA, (ctx) => replyInThread(ctx, SOPS.PENDIENTES_POSTVENTA));
-bot.action(CALLBACKS.PENDIENTES_SEGUIMIENTO, (ctx) => replyInThread(ctx, SOPS.PENDIENTES_SEGUIMIENTO));
+bot.action(CALLBACKS.PENDIENTES_POSTVENTA, (ctx) => replyInThread(ctx, 'PENDIENTES_POSTVENTA'));
+bot.action(CALLBACKS.PENDIENTES_SEGUIMIENTO, (ctx) => replyInThread(ctx, 'PENDIENTES_SEGUIMIENTO'));
 
-bot.action(CALLBACKS.INCIDENCIA_APERTURA, (ctx) => replyInThread(ctx, SOPS.INCIDENCIA_APERTURA));
-bot.action(CALLBACKS.INCIDENCIA_CIERRE, (ctx) => replyInThread(ctx, SOPS.INCIDENCIA_CIERRE));
+bot.action(CALLBACKS.INCIDENCIA_APERTURA, (ctx) => replyInThread(ctx, 'INCIDENCIA_APERTURA'));
+bot.action(CALLBACKS.INCIDENCIA_CIERRE, (ctx) => replyInThread(ctx, 'INCIDENCIA_CIERRE'));
 
-bot.action(CALLBACKS.FORMATO_QC, (ctx) => replyInThread(ctx, SOPS.CONTROL_CALIDAD));
+bot.action(CALLBACKS.FORMATO_QC, (ctx) => replyInThread(ctx, 'CONTROL_CALIDAD'));
 
-bot.action(CALLBACKS.LINEA_INSPECCION, (ctx) => replyInThread(ctx, SOPS.LINEA_INSPECCION));
+bot.action(CALLBACKS.LINEA_INSPECCION, (ctx) => replyInThread(ctx, 'LINEA_INSPECCION'));
 
-bot.action(CALLBACKS.MEJORA_APERTURA, (ctx) => replyInThread(ctx, SOPS.MEJORA_APERTURA));
-bot.action(CALLBACKS.MEJORA_CIERRE, (ctx) => replyInThread(ctx, SOPS.MEJORA_CIERRE));
+bot.action(CALLBACKS.MEJORA_APERTURA, (ctx) => replyInThread(ctx, 'MEJORA_APERTURA'));
+bot.action(CALLBACKS.MEJORA_CIERRE, (ctx) => replyInThread(ctx, 'MEJORA_CIERRE'));
 
 // Acciones de Jornada
 bot.action(CALLBACKS.JORNADA_INICIAR, async (ctx) => {
