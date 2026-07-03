@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { dbGetRecords, dbUpsertRecord, dbDeleteRecord, SopRecord } from '@/lib/dashboard-db';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
     const records = await dbGetRecords();

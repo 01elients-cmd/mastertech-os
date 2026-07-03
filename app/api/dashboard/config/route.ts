@@ -3,6 +3,8 @@ import fs from 'fs';
 import path from 'path';
 import { createClient } from '@supabase/supabase-js';
 
+export const dynamic = 'force-dynamic';
+
 const envPath = path.join(process.cwd(), '.env.local');
 
 // Helper to parse .env file

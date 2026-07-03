@@ -8,6 +8,8 @@ export const FORUM_THREADS = {
   INSPECCION: 19,
   INCIDENCIAS: 17,
   MEJORA: 27,
+  // Nuevos — Configurar con IDs reales usando /getid
+  GERENCIA: parseInt(process.env.MANAGEMENT_THREAD_ID || '0'),
 } as const;
 
 export const CALLBACKS = {

@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { dbGetJornadas, dbUpsertJornada, dbDeleteJornada, Jornada } from '@/lib/dashboard-db';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
     const jornadas = await dbGetJornadas();

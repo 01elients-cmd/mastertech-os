@@ -2,12 +2,27 @@ import { Telegraf, Markup } from 'telegraf';
 import { FORUM_THREADS, CALLBACKS } from './constants';
 import { SOPS } from '../templates/sops';
 import { supabase } from './supabase';
+import { fmt } from './formatter';
 import { dbGetTemplates } from '../dashboard-db';
+
+// Módulos
+import { processPreventiveAlerts } from './modules/preventive-alerts';
+import { handleFluidCommand, handleStockCommand, handleAddInventoryCommand, handleRestockCommand } from './modules/inventory';
+import { handleMediaMessage, handleMediaDataResponse } from './modules/media-registry';
+import { handleDtcCommand } from './modules/dtc-dictionary';
+import { extractEntities } from './modules/entity-extraction';
+import { handleApprovalRequest, handleApproveAction, handleRejectAction } from './modules/approval-cycle';
+import { handleLogisticsCommand, handleExternalJobCommand, handleExternalReturnCommand } from './modules/logistics';
+import { handleWikiCommand, handleBriefingCommand, handleStandupCommand } from './modules/knowledge-briefing';
+import { sendOemProtocol } from './modules/sla-oem';
 
 export const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN || '123456789:PlaceholderToken');
 
+// Thread de gerencia para alertas (configurar con el ID real)
+const MANAGEMENT_THREAD = parseInt(process.env.MANAGEMENT_THREAD_ID || '0');
+
 // ==========================================
-// 1. LISTENERS DE COMANDOS POR HILOS
+// 1. COMANDOS ORIGINALES POR HILOS
 // ==========================================
 
 bot.command('getid', (ctx) => {
@@ -137,7 +152,55 @@ bot.command('mejora', async (ctx) => {
 });
 
 // ==========================================
-// 2. MANEJADOR DE ACCIONES (BOTONES)
+// 2. NUEVOS COMANDOS (MÓDULOS)
+// ==========================================
+
+// Inventario
+bot.command('fluido', handleFluidCommand);
+bot.command('stock', handleStockCommand);
+bot.command('agregar_inventario', handleAddInventoryCommand);
+bot.command('reabastecer', handleRestockCommand);
+
+// DTC Dictionary
+bot.command('dtc', handleDtcCommand);
+
+// Aprobaciones
+bot.command('aprobar', handleApprovalRequest);
+
+// Logística y trabajos externos
+bot.command('logistica', handleLogisticsCommand);
+bot.command('externo', handleExternalJobCommand);
+bot.command('retorno_externo', handleExternalReturnCommand);
+
+// Knowledge Base y Briefings
+bot.command('wiki', handleWikiCommand);
+bot.command('briefing_direccion', handleBriefingCommand);
+bot.command('standup', handleStandupCommand);
+
+// Ingreso con kilometraje (dispara protocolo OEM)
+bot.command('ingreso', async (ctx) => {
+  const args = ctx.message.text.split(/\s+/).slice(1);
+  if (args.length === 0) {
+    await ctx.reply(fmt.errorMessage('Uso: /ingreso <km> [marca] [modelo]\nEjemplo: /ingreso 80000 Toyota Tacoma'), { parse_mode: 'HTML' });
+    return;
+  }
+  const km = parseInt(args[0]);
+  const brand = args[1] || 'General';
+  const model = args.slice(2).join(' ') || undefined;
+
+  if (isNaN(km)) {
+    await ctx.reply(fmt.errorMessage('El kilometraje debe ser un número.'), { parse_mode: 'HTML' });
+    return;
+  }
+
+  await ctx.reply(fmt.successMessage(`Ingreso registrado: ${km.toLocaleString()} km\nMarca: ${brand}${model ? '\nModelo: ' + model : ''}`), { parse_mode: 'HTML' });
+
+  // Disparar protocolo OEM
+  await sendOemProtocol(ctx, km, brand, model);
+});
+
+// ==========================================
+// 3. MANEJADOR DE ACCIONES (BOTONES DINÁMICOS)
 // ==========================================
 
 const replyInThread = async (ctx: any, callbackKey: string) => {
@@ -155,34 +218,26 @@ const replyInThread = async (ctx: any, callbackKey: string) => {
   }
 
   await ctx.reply(templateContent, { 
-    parse_mode: 'HTML', // Cambiado a HTML para evitar problemas con Markdown
+    parse_mode: 'HTML',
     message_thread_id: threadId 
   });
 };
 
-// Vinculación de botones con sus plantillas
+// Vinculación de botones con sus plantillas dinámicas / estáticas
 bot.action(CALLBACKS.NUEVO_INGRESO, (ctx) => replyInThread(ctx, 'NUEVO_INGRESO'));
-
 bot.action(CALLBACKS.SOLICITUD_REPUESTO, (ctx) => replyInThread(ctx, 'SOLICITUD_REPUESTO'));
 bot.action(CALLBACKS.COTIZACION_REPUESTO, (ctx) => replyInThread(ctx, 'COTIZACION_REPUESTO'));
-
 bot.action(CALLBACKS.NUEVOS_HALLAZGOS, (ctx) => replyInThread(ctx, 'NUEVOS_HALLAZGOS'));
 bot.action(CALLBACKS.LISTO_PARCIAL, (ctx) => replyInThread(ctx, 'LISTO_PARCIAL'));
 bot.action(CALLBACKS.ESTATUS_OP, (ctx) => replyInThread(ctx, 'ESTATUS_OP'));
-
 bot.action(CALLBACKS.GARANTIA_REINGRESO, (ctx) => replyInThread(ctx, 'GARANTIA_REINGRESO'));
 bot.action(CALLBACKS.GARANTIA_RETRABAJO, (ctx) => replyInThread(ctx, 'GARANTIA_RETRABAJO'));
-
 bot.action(CALLBACKS.PENDIENTES_POSTVENTA, (ctx) => replyInThread(ctx, 'PENDIENTES_POSTVENTA'));
 bot.action(CALLBACKS.PENDIENTES_SEGUIMIENTO, (ctx) => replyInThread(ctx, 'PENDIENTES_SEGUIMIENTO'));
-
 bot.action(CALLBACKS.INCIDENCIA_APERTURA, (ctx) => replyInThread(ctx, 'INCIDENCIA_APERTURA'));
 bot.action(CALLBACKS.INCIDENCIA_CIERRE, (ctx) => replyInThread(ctx, 'INCIDENCIA_CIERRE'));
-
 bot.action(CALLBACKS.FORMATO_QC, (ctx) => replyInThread(ctx, 'CONTROL_CALIDAD'));
-
 bot.action(CALLBACKS.LINEA_INSPECCION, (ctx) => replyInThread(ctx, 'LINEA_INSPECCION'));
-
 bot.action(CALLBACKS.MEJORA_APERTURA, (ctx) => replyInThread(ctx, 'MEJORA_APERTURA'));
 bot.action(CALLBACKS.MEJORA_CIERRE, (ctx) => replyInThread(ctx, 'MEJORA_CIERRE'));
 
@@ -259,25 +314,41 @@ bot.action(CALLBACKS.JORNADA_FINALIZAR, async (ctx) => {
   ctx.reply(`🛑 *Jornada finalizada*.\n\n👤 *Técnico:* ${username}\n⏱️ *Tiempo trabajado:* ${diffHrs} horas y ${diffMins} minutos.\n\n¡Buen trabajo hoy! Descansa.`, { parse_mode: 'Markdown' });
 });
 
+// Acciones de Aprobación (botones dinámicos APPROVE_/REJECT_)
+bot.action(/^APPROVE_(.+)$/, async (ctx) => {
+  const approvalId = ctx.match[1];
+  await handleApproveAction(ctx, approvalId);
+});
+
+bot.action(/^REJECT_(.+)$/, async (ctx) => {
+  const approvalId = ctx.match[1];
+  await handleRejectAction(ctx, approvalId);
+});
+
 // ==========================================
-// 3. MANEJO DE MEDIOS (RÁFAGAS DE FOTOS/VIDEOS)
+// 4. MANEJO DE MEDIOS (FOTOS/VIDEOS)
 // ==========================================
 
 bot.on(['photo', 'video', 'document'], async (ctx) => {
-  const message = ctx.message;
-  const caption = 'caption' in message ? message.caption : '';
-  
-  if (caption && caption.includes('#OT')) {
-    const otMatch = caption.match(/#OT(\d+)/); 
-    
-    if (otMatch) {
-      const otNumber = otMatch[1];
-      
-      let fileId = '';
-      if ('photo' in message) fileId = message.photo[message.photo.length - 1].file_id;
-      else if ('video' in message) fileId = message.video.file_id;
+  await handleMediaMessage(ctx);
+});
 
-      console.log(`Guardando media para OT: ${otNumber}. FileID: ${fileId}`);
-    }
+// ==========================================
+// 5. MANEJO DE TEXTO LIBRE
+// ==========================================
+
+bot.on('text', async (ctx) => {
+  const text = ctx.message.text;
+
+  // Ignorar comandos (ya manejados arriba)
+  if (text.startsWith('/')) return;
+
+  // Primero: verificar si el usuario tiene media pendiente de datos
+  const handled = await handleMediaDataResponse(ctx);
+  if (handled) return;
+
+  // Alertas preventivas en todos los mensajes de texto
+  if (MANAGEMENT_THREAD) {
+    await processPreventiveAlerts(ctx, text, MANAGEMENT_THREAD);
   }
 });

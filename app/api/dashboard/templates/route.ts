@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { dbGetTemplates, dbUpsertTemplate } from '@/lib/dashboard-db';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
     const templates = await dbGetTemplates();
