@@ -52,7 +52,7 @@ export async function GET() {
       const key = process.env.SUPABASE_SERVICE_ROLE_KEY || currentEnv.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || currentEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY;
       
       try {
-        const client = createClient(url, key);
+        const client = createClient(url!, key!);
         // Test query on 'jornadas' or simple auth check
         const { error } = await client.from('jornadas').select('*').limit(1);
         if (error) {
@@ -73,12 +73,18 @@ export async function GET() {
       }
     }
 
+    const maskKey = (val: string | undefined) => {
+      if (!val) return '';
+      if (val.length < 10) return val;
+      return `${val.substring(0, 6)}••••${val.substring(val.length - 4)}`;
+    };
+
     return NextResponse.json({
       config: {
-        NEXT_PUBLIC_SUPABASE_URL: currentEnv.NEXT_PUBLIC_SUPABASE_URL || '',
-        NEXT_PUBLIC_SUPABASE_ANON_KEY: currentEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
-        SUPABASE_SERVICE_ROLE_KEY: currentEnv.SUPABASE_SERVICE_ROLE_KEY || '',
-        TELEGRAM_BOT_TOKEN: currentEnv.TELEGRAM_BOT_TOKEN || '',
+        NEXT_PUBLIC_SUPABASE_URL: currentEnv.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: currentEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY ? currentEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY : (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? maskKey(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) : ''),
+        SUPABASE_SERVICE_ROLE_KEY: currentEnv.SUPABASE_SERVICE_ROLE_KEY ? currentEnv.SUPABASE_SERVICE_ROLE_KEY : (process.env.SUPABASE_SERVICE_ROLE_KEY ? maskKey(process.env.SUPABASE_SERVICE_ROLE_KEY) : ''),
+        TELEGRAM_BOT_TOKEN: currentEnv.TELEGRAM_BOT_TOKEN ? currentEnv.TELEGRAM_BOT_TOKEN : (process.env.TELEGRAM_BOT_TOKEN ? maskKey(process.env.TELEGRAM_BOT_TOKEN) : ''),
       },
       status: {
         supabase: supabaseStatus,
@@ -96,11 +102,21 @@ export async function POST(req: Request) {
     const body = await req.json();
     const currentEnv = parseEnv();
 
+    const isMasked = (val: string) => val.includes('••••');
+
     // Update variables
-    if ('NEXT_PUBLIC_SUPABASE_URL' in body) currentEnv.NEXT_PUBLIC_SUPABASE_URL = body.NEXT_PUBLIC_SUPABASE_URL;
-    if ('NEXT_PUBLIC_SUPABASE_ANON_KEY' in body) currentEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY = body.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    if ('SUPABASE_SERVICE_ROLE_KEY' in body) currentEnv.SUPABASE_SERVICE_ROLE_KEY = body.SUPABASE_SERVICE_ROLE_KEY;
-    if ('TELEGRAM_BOT_TOKEN' in body) currentEnv.TELEGRAM_BOT_TOKEN = body.TELEGRAM_BOT_TOKEN;
+    if ('NEXT_PUBLIC_SUPABASE_URL' in body) {
+      currentEnv.NEXT_PUBLIC_SUPABASE_URL = body.NEXT_PUBLIC_SUPABASE_URL;
+    }
+    if ('NEXT_PUBLIC_SUPABASE_ANON_KEY' in body && !isMasked(body.NEXT_PUBLIC_SUPABASE_ANON_KEY)) {
+      currentEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY = body.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    }
+    if ('SUPABASE_SERVICE_ROLE_KEY' in body && !isMasked(body.SUPABASE_SERVICE_ROLE_KEY)) {
+      currentEnv.SUPABASE_SERVICE_ROLE_KEY = body.SUPABASE_SERVICE_ROLE_KEY;
+    }
+    if ('TELEGRAM_BOT_TOKEN' in body && !isMasked(body.TELEGRAM_BOT_TOKEN)) {
+      currentEnv.TELEGRAM_BOT_TOKEN = body.TELEGRAM_BOT_TOKEN;
+    }
 
     writeEnv(currentEnv);
 

@@ -7,6 +7,7 @@ import JornadasManager from '@/components/JornadasManager';
 import RecordsManager from '@/components/RecordsManager';
 import TemplateEditor from '@/components/TemplateEditor';
 import ConfigSettings from '@/components/ConfigSettings';
+import ModulesManager from '@/components/ModulesManager';
 import { 
   LayoutDashboard, 
   Clock, 
@@ -17,7 +18,10 @@ import {
   Sun,
   ShieldCheck,
   Menu,
-  X
+  X,
+  Wrench,
+  Package,
+  Bell
 } from 'lucide-react';
 
 export default function Dashboard() {
@@ -163,6 +167,9 @@ export default function Dashboard() {
 
   const menuItems = [
     { id: 'dashboard', label: 'Panel General', icon: LayoutDashboard },
+    { id: 'ordenes', label: 'Órdenes y Aprobaciones', icon: Wrench },
+    { id: 'inventario', label: 'Inventario', icon: Package },
+    { id: 'alertas', label: 'Alertas y Logística', icon: Bell },
     { id: 'jornadas', label: 'Jornadas de Trabajo', icon: Clock },
     { id: 'registros', label: 'Respuestas & SOPs', icon: FileText },
     { id: 'plantillas', label: 'Editor de Plantillas', icon: MessageSquareCode },
@@ -248,7 +255,7 @@ export default function Dashboard() {
                   onClick={() => handleNavigateTab(item.id)}
                   className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl border text-xs font-semibold tracking-wide transition ${
                     isActive
-                      ? 'bg-sky-505/20 text-sky-400 border-sky-500/30'
+                      ? 'bg-sky-500/10 text-sky-400 border-sky-500/30'
                       : 'border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40'
                   }`}
                 >
@@ -291,6 +298,18 @@ export default function Dashboard() {
                   onNavigateToTab={setActiveTab}
                   onCreateNewRecord={() => handleNavigateTab('registros')}
                 />
+              )}
+
+              {activeTab === 'ordenes' && (
+                <ModulesManager type="ordenes" />
+              )}
+
+              {activeTab === 'inventario' && (
+                <ModulesManager type="inventario" />
+              )}
+
+              {activeTab === 'alertas' && (
+                <ModulesManager type="alertas" />
               )}
 
               {activeTab === 'jornadas' && (
