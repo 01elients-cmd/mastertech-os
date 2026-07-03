@@ -1,6 +1,7 @@
 /**
  * MasterTech OS — Registro Obligatorio de Media
  * Cada foto/video DEBE incluir modelo de vehículo y número de orden.
+ * Si no se incluye, el bot rechaza y borra el mensaje para evitar desorden.
  */
 
 import type { Context } from 'telegraf';
@@ -8,12 +9,17 @@ import { supabase } from '../supabase';
 import { fmt } from '../formatter';
 
 function parseMediaCaption(caption: string) {
-  const otMatch = caption.match(/#OT\s*(\d+)/i);
+  // Soporta tanto #OT1643 como #1643
+  const otMatch = caption.match(/(?:#OT|#)\s*(\d+)/i);
   const orderNumber = otMatch ? otMatch[1] : null;
   let model: string | null = null;
+  
   if (orderNumber) {
-    const rest = caption.replace(/#OT\s*\d+/i, '').trim();
-    if (rest.length > 0) model = rest.split('\n')[0].trim();
+    // Quita el tag #OT o # seguido del número
+    const rest = caption.replace(/(?:#OT|#)\s*\d+/i, '').trim();
+    if (rest.length > 0) {
+      model = rest.split('\n')[0].trim();
+    }
   }
   return { orderNumber, model };
 }
@@ -39,19 +45,19 @@ export async function handleMediaMessage(ctx: Context): Promise<void> {
   const username = ctx.from?.first_name || 'Técnico';
   const { orderNumber, model } = parseMediaCaption(caption);
 
+  // Politica Estricta: Si no tiene orden o modelo, se borra el mensaje y se rechaza
   if (!orderNumber || !model) {
-    if (userId) {
-      await supabase.from('bot_sessions').upsert({
-        telegram_user_id: String(userId),
-        current_state: 'WAITING_MEDIA_DATA',
-        thread_id: String(threadId || ''),
-        temporary_payload: { pending_media: { fileId, fileType, caption, threadId } },
-        last_interaction: new Date().toISOString()
-      }, { onConflict: 'telegram_user_id' });
+    try {
+      await ctx.deleteMessage();
+    } catch (e) {
+      console.warn('No se pudo borrar el mensaje (posiblemente el bot no es administrador):', e);
     }
-    await ctx.reply(fmt.mediaPrompt(username), {
+    
+    await ctx.reply(fmt.errorMessage(
+      `⚠️ <b>REGISTRO DE EVIDENCIA RECHAZADO</b>\n\n${username}, para enviar fotos, videos o documentos debes escribir el <b>modelo del carro</b> y el <b>número de orden</b> en la descripción de la foto al momento de enviarla.\n\n<b>Ejemplos de descripción válidos:</b>\n• <code>Kia Picanto #1643</code>\n• <code>Toyota Tacoma #OT5201</code>`
+    ), { 
       parse_mode: 'HTML',
-      reply_parameters: { message_id: message.message_id }
+      message_thread_id: threadId
     });
     return;
   }
@@ -61,34 +67,16 @@ export async function handleMediaMessage(ctx: Context): Promise<void> {
     orderNumber, model,
     fileType: fileType === 'photo' ? '📷 Foto' : fileType === 'video' ? '🎥 Video' : '📄 Doc',
     count: 1
-  }), { parse_mode: 'HTML', reply_parameters: { message_id: message.message_id } });
+  }), { 
+    parse_mode: 'HTML', 
+    reply_parameters: { message_id: message.message_id } 
+  });
 }
 
 export async function handleMediaDataResponse(ctx: Context): Promise<boolean> {
-  const message = ctx.message;
-  if (!message || !('text' in message)) return false;
-  const userId = ctx.from?.id;
-  if (!userId) return false;
-
-  const { data: session } = await supabase.from('bot_sessions')
-    .select('*').eq('telegram_user_id', String(userId)).eq('current_state', 'WAITING_MEDIA_DATA').single();
-  if (!session?.temporary_payload?.pending_media) return false;
-
-  const { orderNumber, model } = parseMediaCaption(message.text);
-  if (!orderNumber || !model) {
-    await ctx.reply(fmt.errorMessage('Formato: #OT1234 Toyota Tacoma'), {
-      parse_mode: 'HTML', reply_parameters: { message_id: message.message_id }
-    });
-    return true;
-  }
-
-  const pm = session.temporary_payload.pending_media;
-  await saveMedia(pm.fileId, pm.fileType, pm.caption, pm.threadId, userId, ctx.from?.first_name || 'Técnico', orderNumber, model);
-  await supabase.from('bot_sessions').update({ current_state: 'IDLE', temporary_payload: null }).eq('telegram_user_id', String(userId));
-  await ctx.reply(fmt.mediaConfirm({ orderNumber, model, fileType: pm.fileType === 'photo' ? '📷 Foto' : '🎥 Video', count: 1 }), {
-    parse_mode: 'HTML', reply_parameters: { message_id: message.message_id }
-  });
-  return true;
+  // Este flujo ya no es necesario dado que borramos el mensaje inmediatamente,
+  // pero lo mantenemos como stub retornando false para no romper firmas.
+  return false;
 }
 
 async function saveMedia(fileId: string, fileType: string, caption: string | undefined, threadId: number | undefined, userId: number | undefined, username: string, orderNumber: string, model: string) {
