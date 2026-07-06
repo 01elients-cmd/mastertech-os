@@ -17,7 +17,7 @@ interface ConfigData {
   NEXT_PUBLIC_SUPABASE_ANON_KEY: string;
   SUPABASE_SERVICE_ROLE_KEY: string;
   TELEGRAM_BOT_TOKEN: string;
-  REQUIRE_MEDIA_CAPTION?: string;
+  REQUIRE_MEDIA_CAPTION: string;
 }
 
 interface ConnectionStatus {
