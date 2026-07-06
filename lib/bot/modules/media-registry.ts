@@ -24,6 +24,10 @@ function parseMediaCaption(caption: string) {
   return { orderNumber, model };
 }
 
+// Caché en memoria para evitar spam de respuestas en álbumes (funciona si comparten isolate en Serverless)
+const repliedAlbums = new Set<string>();
+const albumSharedData = new Map<string, { orderNumber: string; model: string }>();
+
 export async function handleMediaMessage(ctx: Context): Promise<void> {
   const message = ctx.message;
   if (!message) return;
@@ -43,43 +47,112 @@ export async function handleMediaMessage(ctx: Context): Promise<void> {
   const threadId = 'message_thread_id' in message ? (message as any).message_thread_id : undefined;
   const userId = ctx.from?.id;
   const username = ctx.from?.first_name || 'Técnico';
-  const { orderNumber, model } = parseMediaCaption(caption);
+  let { orderNumber, model } = parseMediaCaption(caption);
 
-  // Politica Estricta: Si no tiene orden o modelo, se borra el mensaje y se rechaza (configurable)
   const isStrict = process.env.REQUIRE_MEDIA_CAPTION === 'true';
+  const mediaGroupId = (message as any).media_group_id as string | undefined;
 
-  if (isStrict && (!orderNumber || !model)) {
-    try {
-      await ctx.deleteMessage();
-    } catch (e) {
-      console.warn('No se pudo borrar el mensaje (posiblemente el bot no es administrador):', e);
+  let shouldReply = true;
+
+  // ==========================================
+  // MANEJO DE ÁLBUMES EN ENTORNO SERVERLESS
+  // ==========================================
+  if (mediaGroupId) {
+    // 1. Heredar la orden (si este archivo no tiene caption, buscarlo)
+    if (orderNumber && model) {
+      // Guardar en caché del isolate para las demás fotos
+      albumSharedData.set(mediaGroupId, { orderNumber, model });
+      setTimeout(() => albumSharedData.delete(mediaGroupId), 15000);
+    } else {
+      if (albumSharedData.has(mediaGroupId)) {
+        const cached = albumSharedData.get(mediaGroupId)!;
+        orderNumber = cached.orderNumber;
+        model = cached.model;
+      } else {
+        // Retardo para dar oportunidad a que la foto con texto se guarde en la BD primero
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        
+        // Buscar en la BD la subida más reciente de este usuario (últimos 15 segundos)
+        const fifteenSecondsAgo = new Date(Date.now() - 15000).toISOString();
+        const { data: recent } = await supabase
+          .from('media_registry')
+          .select('order_number, model')
+          .eq('uploaded_by_telegram_id', String(userId))
+          .not('order_number', 'is', null)
+          .gte('created_at', fifteenSecondsAgo)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+
+        if (recent && recent.order_number) {
+          orderNumber = String(recent.order_number);
+          model = recent.model;
+          albumSharedData.set(mediaGroupId, { orderNumber, model: model || '' });
+        }
+      }
     }
-    
-    await ctx.reply(fmt.errorMessage(
-      `⚠️ <b>REGISTRO DE EVIDENCIA RECHAZADO</b>\n\n${username}, para enviar fotos, videos o documentos debes escribir el <b>modelo del carro</b> y el <b>número de orden</b> en la descripción de la foto al momento de enviarla.\n\n<b>Ejemplos de descripción válidos:</b>\n• <code>Kia Picanto #1643</code>\n• <code>Toyota Tacoma #OT5201</code>`
-    ), { 
-      parse_mode: 'HTML',
-      message_thread_id: threadId
-    });
+
+    // 2. Control de Spam: Solo respondemos a UN mensaje por álbum
+    if (repliedAlbums.has(mediaGroupId)) {
+      shouldReply = false;
+    } else {
+      repliedAlbums.add(mediaGroupId);
+      shouldReply = true;
+      setTimeout(() => repliedAlbums.delete(mediaGroupId), 15000);
+    }
+  }
+
+  // ==========================================
+  // FLUJO DE RECHAZO (Políticas estrictas)
+  // ==========================================
+  if (isStrict && (!orderNumber || !model)) {
+    if (shouldReply) {
+      try {
+        await ctx.deleteMessage();
+      } catch (e) {
+        console.warn('No se pudo borrar el mensaje (posiblemente el bot no es administrador):', e);
+      }
+      
+      await ctx.reply(fmt.errorMessage(
+        `⚠️ <b>REGISTRO DE EVIDENCIA RECHAZADO</b>\n\n${username}, para enviar fotos, videos o documentos debes escribir el <b>modelo del carro</b> y el <b>número de orden</b> en la descripción de la foto al momento de enviarla.\n\n<b>Ejemplos de descripción válidos:</b>\n• <code>Kia Picanto #1643</code>\n• <code>Toyota Tacoma #OT5201</code>`
+      ), { 
+        parse_mode: 'HTML',
+        message_thread_id: threadId
+      });
+    }
     return;
   }
 
+  // ==========================================
+  // GUARDADO Y CONFIRMACIÓN
+  // ==========================================
   await saveMedia(fileId, fileType, caption, threadId, userId, username, orderNumber, model);
   
-  if (orderNumber && model) {
-    await ctx.reply(fmt.mediaConfirm({
-      orderNumber, model,
-      fileType: fileType === 'photo' ? '📷 Foto' : fileType === 'video' ? '🎥 Video' : '📄 Doc',
-      count: 1
-    }), { 
-      parse_mode: 'HTML', 
-      reply_parameters: { message_id: message.message_id } 
-    });
-  } else {
-    await ctx.reply(`✅ <b>Evidencia recibida</b> sin orden asignada.`, { 
-      parse_mode: 'HTML', 
-      reply_parameters: { message_id: message.message_id } 
-    });
+  if (shouldReply) {
+    if (orderNumber && model) {
+      const displayType = mediaGroupId 
+        ? '📁 Álbum (Varias fotos/videos)' 
+        : (fileType === 'photo' ? '📷 Foto' : fileType === 'video' ? '🎥 Video' : '📄 Doc');
+        
+      await ctx.reply(fmt.mediaConfirm({
+        orderNumber, 
+        model,
+        fileType: displayType,
+        count: 1 // Como es serverless, el count es simbólico para el álbum
+      }), { 
+        parse_mode: 'HTML', 
+        reply_parameters: { message_id: message.message_id } 
+      });
+    } else {
+      const msg = mediaGroupId 
+        ? `✅ <b>Álbum recibido</b> sin orden asignada.` 
+        : `✅ <b>Evidencia recibida</b> sin orden asignada.`;
+        
+      await ctx.reply(msg, { 
+        parse_mode: 'HTML', 
+        reply_parameters: { message_id: message.message_id } 
+      });
+    }
   }
 }
 
@@ -103,3 +176,4 @@ async function saveMedia(fileId: string, fileType: string, caption: string | und
     uploaded_by: username, uploaded_by_telegram_id: userId ? String(userId) : null, thread_id: threadId
   }]);
 }
+
