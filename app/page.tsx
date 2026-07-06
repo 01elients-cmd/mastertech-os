@@ -38,6 +38,7 @@ export default function Dashboard() {
     NEXT_PUBLIC_SUPABASE_ANON_KEY: '',
     SUPABASE_SERVICE_ROLE_KEY: '',
     TELEGRAM_BOT_TOKEN: '',
+    REQUIRE_MEDIA_CAPTION: 'false',
   });
   const [status, setStatus] = useState({
     supabase: 'DISCONNECTED',

@@ -17,6 +17,7 @@ interface ConfigData {
   NEXT_PUBLIC_SUPABASE_ANON_KEY: string;
   SUPABASE_SERVICE_ROLE_KEY: string;
   TELEGRAM_BOT_TOKEN: string;
+  REQUIRE_MEDIA_CAPTION?: string;
 }
 
 interface ConnectionStatus {
@@ -94,6 +95,7 @@ export default function ConfigSettings({
   const [supabaseAnonKey, setSupabaseAnonKey] = useState(initialConfig.NEXT_PUBLIC_SUPABASE_ANON_KEY);
   const [supabaseRoleKey, setSupabaseRoleKey] = useState(initialConfig.SUPABASE_SERVICE_ROLE_KEY);
   const [botToken, setBotToken] = useState(initialConfig.TELEGRAM_BOT_TOKEN);
+  const [requireMediaCaption, setRequireMediaCaption] = useState(initialConfig.REQUIRE_MEDIA_CAPTION === 'true');
   
   const [copied, setCopied] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -116,7 +118,8 @@ export default function ConfigSettings({
         NEXT_PUBLIC_SUPABASE_URL: supabaseUrl.trim(),
         NEXT_PUBLIC_SUPABASE_ANON_KEY: supabaseAnonKey.trim(),
         SUPABASE_SERVICE_ROLE_KEY: supabaseRoleKey.trim(),
-        TELEGRAM_BOT_TOKEN: botToken.trim()
+        TELEGRAM_BOT_TOKEN: botToken.trim(),
+        REQUIRE_MEDIA_CAPTION: requireMediaCaption ? 'true' : 'false'
       });
       setSaveSuccess(true);
       setTimeout(() => {
@@ -308,6 +311,29 @@ export default function ConfigSettings({
                 placeholder="123456789:ABCdefGhIJKlmNoPQRsT..."
                 className="w-full bg-[#18181b] border border-zinc-850 hover:border-zinc-800 focus:border-sky-500/30 focus:outline-none focus:ring-1 focus:ring-sky-500/20 text-white font-mono text-xs rounded-xl px-3 py-2.5 transition"
               />
+            </div>
+
+            {/* Toggle for Strict Media Requirement */}
+            <div className="flex items-center justify-between p-3 bg-zinc-950 rounded-xl border border-zinc-900 mt-2">
+              <div>
+                <span className="text-xs font-bold text-zinc-300 block">Exigir formato en fotos/videos</span>
+                <span className="text-[10px] text-zinc-500 leading-tight block">Si está activo, el bot elimina las fotos que no incluyan modelo y número de orden en la descripción.</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRequireMediaCaption(!requireMediaCaption)}
+                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full transition-colors duration-200 ease-in-out focus:outline-none ${
+                  requireMediaCaption ? 'bg-sky-500' : 'bg-zinc-700'
+                }`}
+              >
+                <span className="sr-only">Toggle</span>
+                <span
+                  aria-hidden="true"
+                  className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                    requireMediaCaption ? 'translate-x-2' : '-translate-x-2'
+                  }`}
+                />
+              </button>
             </div>
 
             {/* Actions Bar */}

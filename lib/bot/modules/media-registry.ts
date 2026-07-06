@@ -45,8 +45,10 @@ export async function handleMediaMessage(ctx: Context): Promise<void> {
   const username = ctx.from?.first_name || 'Técnico';
   const { orderNumber, model } = parseMediaCaption(caption);
 
-  // Politica Estricta: Si no tiene orden o modelo, se borra el mensaje y se rechaza
-  if (!orderNumber || !model) {
+  // Politica Estricta: Si no tiene orden o modelo, se borra el mensaje y se rechaza (configurable)
+  const isStrict = process.env.REQUIRE_MEDIA_CAPTION === 'true';
+
+  if (isStrict && (!orderNumber || !model)) {
     try {
       await ctx.deleteMessage();
     } catch (e) {
@@ -63,14 +65,22 @@ export async function handleMediaMessage(ctx: Context): Promise<void> {
   }
 
   await saveMedia(fileId, fileType, caption, threadId, userId, username, orderNumber, model);
-  await ctx.reply(fmt.mediaConfirm({
-    orderNumber, model,
-    fileType: fileType === 'photo' ? '📷 Foto' : fileType === 'video' ? '🎥 Video' : '📄 Doc',
-    count: 1
-  }), { 
-    parse_mode: 'HTML', 
-    reply_parameters: { message_id: message.message_id } 
-  });
+  
+  if (orderNumber && model) {
+    await ctx.reply(fmt.mediaConfirm({
+      orderNumber, model,
+      fileType: fileType === 'photo' ? '📷 Foto' : fileType === 'video' ? '🎥 Video' : '📄 Doc',
+      count: 1
+    }), { 
+      parse_mode: 'HTML', 
+      reply_parameters: { message_id: message.message_id } 
+    });
+  } else {
+    await ctx.reply(`✅ <b>Evidencia recibida</b> sin orden asignada.`, { 
+      parse_mode: 'HTML', 
+      reply_parameters: { message_id: message.message_id } 
+    });
+  }
 }
 
 export async function handleMediaDataResponse(ctx: Context): Promise<boolean> {
@@ -79,11 +89,16 @@ export async function handleMediaDataResponse(ctx: Context): Promise<boolean> {
   return false;
 }
 
-async function saveMedia(fileId: string, fileType: string, caption: string | undefined, threadId: number | undefined, userId: number | undefined, username: string, orderNumber: string, model: string) {
-  const { data: wo } = await supabase.from('work_orders').select('id, plate, brand').eq('order_number', parseInt(orderNumber)).single();
+async function saveMedia(fileId: string, fileType: string, caption: string | undefined, threadId: number | undefined, userId: number | undefined, username: string, orderNumber: string | null, model: string | null) {
+  let wo = null;
+  if (orderNumber) {
+    const { data } = await supabase.from('work_orders').select('id, plate, brand').eq('order_number', parseInt(orderNumber)).single();
+    wo = data;
+  }
+  
   await supabase.from('media_registry').insert([{
-    work_order_id: wo?.id || null, order_number: parseInt(orderNumber),
-    plate: wo?.plate || null, brand: wo?.brand || null, model,
+    work_order_id: wo?.id || null, order_number: orderNumber ? parseInt(orderNumber) : null,
+    plate: wo?.plate || null, brand: wo?.brand || null, model: model || null,
     file_id: fileId, file_type: fileType, caption: caption || null,
     uploaded_by: username, uploaded_by_telegram_id: userId ? String(userId) : null, thread_id: threadId
   }]);

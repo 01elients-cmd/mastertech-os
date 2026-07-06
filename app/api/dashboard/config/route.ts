@@ -85,6 +85,7 @@ export async function GET() {
         NEXT_PUBLIC_SUPABASE_ANON_KEY: currentEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY ? currentEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY : (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? maskKey(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) : ''),
         SUPABASE_SERVICE_ROLE_KEY: currentEnv.SUPABASE_SERVICE_ROLE_KEY ? currentEnv.SUPABASE_SERVICE_ROLE_KEY : (process.env.SUPABASE_SERVICE_ROLE_KEY ? maskKey(process.env.SUPABASE_SERVICE_ROLE_KEY) : ''),
         TELEGRAM_BOT_TOKEN: currentEnv.TELEGRAM_BOT_TOKEN ? currentEnv.TELEGRAM_BOT_TOKEN : (process.env.TELEGRAM_BOT_TOKEN ? maskKey(process.env.TELEGRAM_BOT_TOKEN) : ''),
+        REQUIRE_MEDIA_CAPTION: currentEnv.REQUIRE_MEDIA_CAPTION || process.env.REQUIRE_MEDIA_CAPTION || 'false',
       },
       status: {
         supabase: supabaseStatus,
@@ -116,6 +117,9 @@ export async function POST(req: Request) {
     }
     if ('TELEGRAM_BOT_TOKEN' in body && !isMasked(body.TELEGRAM_BOT_TOKEN)) {
       currentEnv.TELEGRAM_BOT_TOKEN = body.TELEGRAM_BOT_TOKEN;
+    }
+    if ('REQUIRE_MEDIA_CAPTION' in body) {
+      currentEnv.REQUIRE_MEDIA_CAPTION = String(body.REQUIRE_MEDIA_CAPTION);
     }
 
     writeEnv(currentEnv);
