@@ -128,8 +128,17 @@ bot.command('informe_incidencias', async (ctx) => {
   
   const byPerson: Record<string, number> = {};
   incidents.forEach(inc => {
-    // If the creator is not defined, we fallback to 'Desconocido'
-    const person = inc.creator || 'Desconocido';
+    let person = 'Desconocido';
+    const match = inc.content?.match(/Origen_Problema:\s*([^\n]+)/i);
+    if (match && match[1]) {
+      person = match[1].trim();
+    } else if (inc.creator) {
+      person = inc.creator;
+    }
+    
+    // Fallback if the extracted person still has brackets (not filled out properly)
+    if (person.startsWith('[')) person = 'Desconocido';
+    
     byPerson[person] = (byPerson[person] || 0) + 1;
   });
   
