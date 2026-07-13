@@ -3,7 +3,7 @@ import { FORUM_THREADS, CALLBACKS } from './constants';
 import { SOPS } from '../templates/sops';
 import { supabase } from './supabase';
 import { fmt } from './formatter';
-import { dbGetTemplates } from '../dashboard-db';
+import { dbGetTemplates, dbGetRecords } from '../dashboard-db';
 
 // Módulos
 import { processPreventiveAlerts } from './modules/preventive-alerts';
@@ -115,6 +115,30 @@ bot.command('incidencias', async (ctx) => {
       [Markup.button.callback('🟢 2. Resolución (Cierre)', CALLBACKS.INCIDENCIA_CIERRE)]
     ])
   });
+});
+
+bot.command('informe_incidencias', async (ctx) => {
+  const records = await dbGetRecords();
+  const incidents = records.filter(r => r.category === 'incidencias');
+  
+  if (incidents.length === 0) {
+    await ctx.reply(fmt.successMessage('No hay incidencias registradas.'), { parse_mode: 'HTML' });
+    return;
+  }
+  
+  const byPerson: Record<string, number> = {};
+  incidents.forEach(inc => {
+    // If the creator is not defined, we fallback to 'Desconocido'
+    const person = inc.creator || 'Desconocido';
+    byPerson[person] = (byPerson[person] || 0) + 1;
+  });
+  
+  const reportHTML = fmt.incidentsReport({
+    total: incidents.length,
+    byPerson
+  });
+  
+  await ctx.reply(reportHTML, { parse_mode: 'HTML' });
 });
 
 bot.command('calidad', async (ctx) => {

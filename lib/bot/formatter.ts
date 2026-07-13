@@ -265,6 +265,29 @@ ARCHIVOS: ${data.count}</pre>`;
 ${content}</pre>`;
   },
 
+  /** Informe de incidencias */
+  incidentsReport(data: {
+    total: number;
+    byPerson: Record<string, number>;
+  }): string {
+    const lines = [
+      `📊 INFORME DE INCIDENCIAS`,
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+      ``,
+      `🔴 Total de incidencias: ${data.total}`,
+      ``,
+      `👤 Por persona:`,
+    ];
+    
+    Object.entries(data.byPerson)
+      .sort((a, b) => b[1] - a[1])
+      .forEach(([person, count]) => {
+        lines.push(`  • ${person}: ${count}`);
+      });
+      
+    return `<pre>${lines.join('\n')}</pre>`;
+  },
+
   /** Separador visual */
   separator(): string {
     return `<pre>━━━━━━━━━━━━━━━━━━━━━━━━━━━━</pre>`;
