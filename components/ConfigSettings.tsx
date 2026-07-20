@@ -76,15 +76,25 @@ CREATE TABLE IF NOT EXISTS sops_records (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
+-- 4. Crear Tabla de Tópicos de Vehículos (Redirección de Media)
+CREATE TABLE IF NOT EXISTS vehicle_topics (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  identifier text UNIQUE NOT NULL,
+  thread_id integer NOT NULL,
+  created_at timestamptz DEFAULT now()
+);
+
 -- Indexar para optimización de búsquedas rápidas
 CREATE INDEX IF NOT EXISTS idx_jornadas_telegram_id ON jornadas(telegram_id);
 CREATE INDEX IF NOT EXISTS idx_sops_records_category ON sops_records(category);
 CREATE INDEX IF NOT EXISTS idx_sops_records_plate ON sops_records(plate);
+CREATE INDEX IF NOT EXISTS idx_vehicle_topics_identifier ON vehicle_topics(identifier);
 
 -- Desactivar políticas RLS si es una API de administración o habilitar políticas permisivas para desarrollo rápido
 ALTER TABLE jornadas DISABLE ROW LEVEL SECURITY;
 ALTER TABLE sops_templates DISABLE ROW LEVEL SECURITY;
 ALTER TABLE sops_records DISABLE ROW LEVEL SECURITY;
+ALTER TABLE vehicle_topics DISABLE ROW LEVEL SECURITY;
 `;
 
 export default function ConfigSettings({ 
