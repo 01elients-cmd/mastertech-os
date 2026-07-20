@@ -18,6 +18,8 @@ interface ConfigData {
   SUPABASE_SERVICE_ROLE_KEY: string;
   TELEGRAM_BOT_TOKEN: string;
   REQUIRE_MEDIA_CAPTION: string;
+  TALLER_ORIGEN_ID?: string;
+  TALLER_FORO_DESTINO_ID?: string;
 }
 
 interface ConnectionStatus {
@@ -96,6 +98,8 @@ export default function ConfigSettings({
   const [supabaseRoleKey, setSupabaseRoleKey] = useState(initialConfig.SUPABASE_SERVICE_ROLE_KEY);
   const [botToken, setBotToken] = useState(initialConfig.TELEGRAM_BOT_TOKEN);
   const [requireMediaCaption, setRequireMediaCaption] = useState(initialConfig.REQUIRE_MEDIA_CAPTION === 'true');
+  const [tallerOrigenId, setTallerOrigenId] = useState(initialConfig.TALLER_ORIGEN_ID || '');
+  const [tallerForoDestinoId, setTallerForoDestinoId] = useState(initialConfig.TALLER_FORO_DESTINO_ID || '');
   
   const [copied, setCopied] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -119,7 +123,9 @@ export default function ConfigSettings({
         NEXT_PUBLIC_SUPABASE_ANON_KEY: supabaseAnonKey.trim(),
         SUPABASE_SERVICE_ROLE_KEY: supabaseRoleKey.trim(),
         TELEGRAM_BOT_TOKEN: botToken.trim(),
-        REQUIRE_MEDIA_CAPTION: requireMediaCaption ? 'true' : 'false'
+        REQUIRE_MEDIA_CAPTION: requireMediaCaption ? 'true' : 'false',
+        TALLER_ORIGEN_ID: tallerOrigenId.trim(),
+        TALLER_FORO_DESTINO_ID: tallerForoDestinoId.trim()
       });
       setSaveSuccess(true);
       setTimeout(() => {
@@ -311,6 +317,30 @@ export default function ConfigSettings({
                 placeholder="123456789:ABCdefGhIJKlmNoPQRsT..."
                 className="w-full bg-[#18181b] border border-zinc-850 hover:border-zinc-800 focus:border-sky-500/30 focus:outline-none focus:ring-1 focus:ring-sky-500/20 text-white font-mono text-xs rounded-xl px-3 py-2.5 transition"
               />
+            </div>
+
+            {/* Redirección Nube Archivos */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-zinc-400 block">Taller Origen ID</label>
+                <input 
+                  type="text"
+                  value={tallerOrigenId} 
+                  onChange={(e) => setTallerOrigenId(e.target.value)}
+                  placeholder="-100xxxx"
+                  className="w-full bg-[#18181b] border border-zinc-850 hover:border-zinc-800 focus:border-sky-500/30 focus:outline-none focus:ring-1 focus:ring-sky-500/20 text-white font-mono text-xs rounded-xl px-3 py-2.5 transition"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-zinc-400 block">Taller Destino Foro ID</label>
+                <input 
+                  type="text"
+                  value={tallerForoDestinoId} 
+                  onChange={(e) => setTallerForoDestinoId(e.target.value)}
+                  placeholder="-100yyyy"
+                  className="w-full bg-[#18181b] border border-zinc-850 hover:border-zinc-800 focus:border-sky-500/30 focus:outline-none focus:ring-1 focus:ring-sky-500/20 text-white font-mono text-xs rounded-xl px-3 py-2.5 transition"
+                />
+              </div>
             </div>
 
             {/* Toggle for Strict Media Requirement */}

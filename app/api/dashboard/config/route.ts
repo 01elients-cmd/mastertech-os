@@ -86,6 +86,8 @@ export async function GET() {
         SUPABASE_SERVICE_ROLE_KEY: currentEnv.SUPABASE_SERVICE_ROLE_KEY ? currentEnv.SUPABASE_SERVICE_ROLE_KEY : (process.env.SUPABASE_SERVICE_ROLE_KEY ? maskKey(process.env.SUPABASE_SERVICE_ROLE_KEY) : ''),
         TELEGRAM_BOT_TOKEN: currentEnv.TELEGRAM_BOT_TOKEN ? currentEnv.TELEGRAM_BOT_TOKEN : (process.env.TELEGRAM_BOT_TOKEN ? maskKey(process.env.TELEGRAM_BOT_TOKEN) : ''),
         REQUIRE_MEDIA_CAPTION: currentEnv.REQUIRE_MEDIA_CAPTION || process.env.REQUIRE_MEDIA_CAPTION || 'false',
+        TALLER_ORIGEN_ID: currentEnv.TALLER_ORIGEN_ID || process.env.TALLER_ORIGEN_ID || '',
+        TALLER_FORO_DESTINO_ID: currentEnv.TALLER_FORO_DESTINO_ID || process.env.TALLER_FORO_DESTINO_ID || '',
       },
       status: {
         supabase: supabaseStatus,
@@ -120,6 +122,12 @@ export async function POST(req: Request) {
     }
     if ('REQUIRE_MEDIA_CAPTION' in body) {
       currentEnv.REQUIRE_MEDIA_CAPTION = String(body.REQUIRE_MEDIA_CAPTION);
+    }
+    if ('TALLER_ORIGEN_ID' in body) {
+      currentEnv.TALLER_ORIGEN_ID = body.TALLER_ORIGEN_ID;
+    }
+    if ('TALLER_FORO_DESTINO_ID' in body) {
+      currentEnv.TALLER_FORO_DESTINO_ID = body.TALLER_FORO_DESTINO_ID;
     }
 
     writeEnv(currentEnv);

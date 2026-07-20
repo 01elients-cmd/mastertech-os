@@ -9,6 +9,7 @@ import { dbGetTemplates, dbGetRecords } from '../dashboard-db';
 import { processPreventiveAlerts } from './modules/preventive-alerts';
 import { handleFluidCommand, handleStockCommand, handleAddInventoryCommand, handleRestockCommand } from './modules/inventory';
 import { handleMediaMessage, handleMediaDataResponse } from './modules/media-registry';
+import { handleMediaRedirect } from './modules/media-redirect';
 import { handleDtcCommand } from './modules/dtc-dictionary';
 import { extractEntities } from './modules/entity-extraction';
 import { handleApprovalRequest, handleApproveAction, handleRejectAction } from './modules/approval-cycle';
@@ -363,6 +364,12 @@ bot.action(/^REJECT_(.+)$/, async (ctx) => {
 // ==========================================
 
 bot.on(['photo', 'video', 'document'], async (ctx) => {
+  // Si viene del grupo origen, redirigir al foro correspondiente
+  if (ctx.chat.id === FORUM_THREADS.TALLER_ORIGEN_ID || ctx.chat.id.toString() === process.env.TALLER_ORIGEN_ID) {
+    await handleMediaRedirect(ctx);
+    return;
+  }
+  
   await handleMediaMessage(ctx);
 });
 

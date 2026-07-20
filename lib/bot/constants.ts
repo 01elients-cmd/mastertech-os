@@ -10,6 +10,9 @@ export const FORUM_THREADS = {
   MEJORA: 27,
   // Nuevos — Configurar con IDs reales usando /getid
   GERENCIA: parseInt(process.env.MANAGEMENT_THREAD_ID || '0'),
+  // Grupos para redirección de media (Nube de Archivos)
+  TALLER_ORIGEN_ID: parseInt(process.env.TALLER_ORIGEN_ID || '0'),
+  TALLER_FORO_DESTINO_ID: parseInt(process.env.TALLER_FORO_DESTINO_ID || '0'),
 } as const;
 
 export const CALLBACKS = {
