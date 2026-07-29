@@ -9,7 +9,11 @@ export async function POST(req: Request) {
     const body = await req.json();
 
     const secret = req.headers.get('x-telegram-bot-api-secret-token');
-    if (process.env.TELEGRAM_SECRET_TOKEN && secret !== process.env.TELEGRAM_SECRET_TOKEN) {
+    const expectedSecret = process.env.TELEGRAM_SECRET_TOKEN;
+
+    // Solo rechazar si existe un TELEGRAM_SECRET_TOKEN configurado Y se envió un header que no coincide
+    if (expectedSecret && secret && secret !== expectedSecret) {
+      console.warn('Telegram Webhook: secret token mismatch');
       return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
     }
 
