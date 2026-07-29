@@ -4,7 +4,7 @@ import { FORUM_THREADS } from '../constants';
 
 export async function handleMediaRedirect(ctx: Context): Promise<void> {
   const message = ctx.message;
-  if (!message) return;
+  if (!message || !ctx.chat) return;
 
   // Extraer el texto explicativo (caption)
   const caption = ('caption' in message ? message.caption : '') || '';
