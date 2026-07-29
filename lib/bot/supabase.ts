@@ -1,6 +1,9 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder-url.supabase.co';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key';
+const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+const rawKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)?.trim();
 
-export const supabase = createClient(supabaseUrl, supabaseKey);
+const supabaseUrl = (rawUrl && rawUrl.startsWith('http')) ? rawUrl : 'https://placeholder-url.supabase.co';
+const supabaseKey = rawKey || 'placeholder-key';
+
+export const supabase: SupabaseClient = createClient(supabaseUrl, supabaseKey);
