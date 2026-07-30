@@ -15,15 +15,8 @@ export async function handleCreateTopicCommand(ctx: Context): Promise<void> {
 
     const topicName = args.join(' ').trim();
 
-    // Determinar el grupo destino del foro (usa el grupo de foro configurado o el chat actual)
-    const targetChatId = FORUM_THREADS.TALLER_FORO_DESTINO_ID || ctx.chat?.id;
-
-    if (!targetChatId) {
-      await ctx.reply('❌ No se encontró el ID del grupo foro de destino.');
-      return;
-    }
-
-    // Crear el nuevo Tema / Hilo en el Foro de Telegram
+    // 1. Crear el nuevo Tema / Hilo en el Foro de la Nube (ID: -1003975478850)
+    const targetChatId = FORUM_THREADS.TALLER_FORO_DESTINO_ID; // -1003975478850
     const newTopic = await ctx.telegram.createForumTopic(targetChatId, topicName);
 
     // Guardar en la base de datos para vinculación automática
@@ -35,7 +28,16 @@ export async function handleCreateTopicCommand(ctx: Context): Promise<void> {
       console.warn('Advertencia guardando topic en BD:', e);
     }
 
-    await ctx.reply(`✅ *¡Tema creado con éxito en el Foro!*\n\n📌 *Nombre:* ${newTopic.name}\n🆔 *ID del Hilo:* \`${newTopic.message_thread_id}\``, {
+    // 2. Enviar el mensaje de notificación de creación al grupo ID: -1003940815012
+    const notificationChatId = FORUM_THREADS.TALLER_ORIGEN_ID; // -1003940815012
+    await ctx.telegram.sendMessage(
+      notificationChatId,
+      `☁️ *NUBE - Sincronización Automática con el Foro*\n\n✅ *Nuevo Hilo Creado:* "${newTopic.name}"\n🆔 *ID de Hilo:* \`${newTopic.message_thread_id}\`\n\n📌 *Notificación:* El tema ha sido creado en la Nube y está activo para la sincronización de archivos.`,
+      { parse_mode: 'Markdown' }
+    );
+
+    // Responder también al usuario que invocó el comando
+    await ctx.reply(`✅ *Tema creado con éxito en el Foro (-1003975478850)!*\n\n📌 *Nombre:* ${newTopic.name}\n🆔 *ID del Hilo:* \`${newTopic.message_thread_id}\`\n📩 *Notificación enviada al grupo (-1003940815012).*`, {
       parse_mode: 'Markdown'
     });
 
