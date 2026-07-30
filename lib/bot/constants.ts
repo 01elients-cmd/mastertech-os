@@ -11,8 +11,8 @@ export const FORUM_THREADS = {
   // Nuevos — Configurar con IDs reales usando /getid
   GERENCIA: parseInt(process.env.MANAGEMENT_THREAD_ID || '0'),
   // Grupos de Telegram
-  TALLER_ORIGEN_ID: parseInt(process.env.TALLER_ORIGEN_ID || '-1003940815012'), // Mensajes de Notificación / Operaciones
-  TALLER_FORO_DESTINO_ID: parseInt(process.env.TALLER_FORO_DESTINO_ID || '-1003975478850'), // Creación de Temas / Foro Nube
+  TALLER_ORIGEN_ID: parseInt(process.env.TALLER_ORIGEN_ID || '-1003975478850'), // Nube de Archivos / Origen Dropzone
+  TALLER_FORO_DESTINO_ID: parseInt(process.env.TALLER_FORO_DESTINO_ID || '-1003940815012'), // Foro Principal Operaciones (Donde se crean los Hilos)
 } as const;
 
 export const CALLBACKS = {

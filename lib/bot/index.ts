@@ -16,6 +16,7 @@ import { handleLogisticsCommand, handleExternalJobCommand, handleExternalReturnC
 import { handleWikiCommand, handleBriefingCommand, handleStandupCommand } from './modules/knowledge-briefing';
 import { sendOemProtocol } from './modules/sla-oem';
 import { handleCreateTopicCommand } from './modules/topic-creator';
+import { processIntakeValidation, registerIntakeActionHandlers } from './modules/intake-validator';
 
 export const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN || '123456789:PlaceholderToken');
 
@@ -414,12 +415,21 @@ bot.action(/^REJECT_(.+)$/, async (ctx) => {
   }
 });
 
+// Registrar manejadores de acción de ingreso inteligente
+registerIntakeActionHandlers(bot);
+
 // ==========================================
 // 4. MANEJO DE MEDIOS Y TEXTO
 // ==========================================
 
 bot.on(['photo', 'video', 'document'], async (ctx) => {
   try {
+    const caption = ('caption' in ctx.message ? ctx.message.caption : '') || '';
+    if (caption) {
+      const intakeHandled = await processIntakeValidation(ctx, caption);
+      if (intakeHandled) return;
+    }
+
     if (ctx.chat.id === FORUM_THREADS.TALLER_ORIGEN_ID || ctx.chat.id.toString() === process.env.TALLER_ORIGEN_ID) {
       await handleMediaRedirect(ctx);
       return;
@@ -434,6 +444,10 @@ bot.on('text', async (ctx) => {
   try {
     const text = ctx.message.text;
     if (text.startsWith('/')) return;
+
+    // Disparador Inteligente con Validación de Ingreso (Vehículo:)
+    const intakeHandled = await processIntakeValidation(ctx, text);
+    if (intakeHandled) return;
 
     const handled = await handleMediaDataResponse(ctx);
     if (handled) return;
