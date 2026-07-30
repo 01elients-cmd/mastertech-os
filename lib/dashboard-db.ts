@@ -327,6 +327,8 @@ export async function dbUpsertRecord(record: SopRecord): Promise<SopRecord> {
   return record;
 }
 
+export const dbSaveRecord = dbUpsertRecord;
+
 export async function dbDeleteRecord(id: string): Promise<boolean> {
   const supabase = getSupabaseClient();
   if (supabase) {

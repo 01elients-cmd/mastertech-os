@@ -88,6 +88,7 @@ export async function GET() {
         REQUIRE_MEDIA_CAPTION: currentEnv.REQUIRE_MEDIA_CAPTION || process.env.REQUIRE_MEDIA_CAPTION || 'false',
         TALLER_ORIGEN_ID: currentEnv.TALLER_ORIGEN_ID || process.env.TALLER_ORIGEN_ID || '',
         TALLER_FORO_DESTINO_ID: currentEnv.TALLER_FORO_DESTINO_ID || process.env.TALLER_FORO_DESTINO_ID || '',
+        GEMINI_API_KEY: currentEnv.GEMINI_API_KEY ? currentEnv.GEMINI_API_KEY : (process.env.GEMINI_API_KEY ? maskKey(process.env.GEMINI_API_KEY) : ''),
       },
       status: {
         supabase: supabaseStatus,
@@ -119,6 +120,9 @@ export async function POST(req: Request) {
     }
     if ('TELEGRAM_BOT_TOKEN' in body && !isMasked(body.TELEGRAM_BOT_TOKEN)) {
       currentEnv.TELEGRAM_BOT_TOKEN = body.TELEGRAM_BOT_TOKEN;
+    }
+    if ('GEMINI_API_KEY' in body && !isMasked(body.GEMINI_API_KEY)) {
+      currentEnv.GEMINI_API_KEY = body.GEMINI_API_KEY;
     }
     if ('REQUIRE_MEDIA_CAPTION' in body) {
       currentEnv.REQUIRE_MEDIA_CAPTION = String(body.REQUIRE_MEDIA_CAPTION);

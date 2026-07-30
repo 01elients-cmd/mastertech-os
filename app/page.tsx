@@ -8,6 +8,7 @@ import RecordsManager from '@/components/RecordsManager';
 import TemplateEditor from '@/components/TemplateEditor';
 import ConfigSettings from '@/components/ConfigSettings';
 import ModulesManager from '@/components/ModulesManager';
+import ChatWidget from '@/components/ChatWidget';
 import { 
   LayoutDashboard, 
   Clock, 
@@ -352,6 +353,9 @@ export default function Dashboard() {
 
         </main>
       </div>
+
+      {/* Widget de Chat Conversacional Avanzado IA Gemini Pro */}
+      <ChatWidget />
     </div>
   );
 }
