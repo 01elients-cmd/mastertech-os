@@ -13,7 +13,6 @@ interface PendingIntake {
   createdAt: number;
 }
 
-// Almacenamiento en memoria para las solicitudes en pausa
 const pendingIntakes = new Map<string, PendingIntake>();
 
 // Limpiar solicitudes antiguas de más de 30 minutos
@@ -26,41 +25,92 @@ setInterval(() => {
   }
 }, 5 * 60 * 1000);
 
+/**
+ * Extractor ultra-flexible de Orden de Servicio y Vehículo
+ * Soporta escrituras rápidas de mecánicos: "Orden de servicio 1687", "Orden 1687", "OT 1687", "#OT1687", "Nro de orden 1687" sin exigir ':' ni '#'
+ */
+export function extractOrderAndVehicle(text: string): { orden?: string; vehiculo?: string; topicTitle: string } {
+  // Regex flexible para capturar el número de orden en cualquier formato:
+  const ordenMatch = text.match(/(?:#?\b(?:orden(?:\s+de\s+(?:servicio|trabajo))?|nro(?:\s+de)?\s+orden|ot)\b[:\s#]*)([a-z0-9-]+)/i);
+  
+  // Regex flexible para capturar el vehículo:
+  const vehiculoMatch = text.match(/(?:veh[íi]culo|auto|carro)[:\s]*([^\n]+)/i);
+
+  let rawOrden = ordenMatch ? ordenMatch[1].trim() : '';
+  let rawVehiculo = vehiculoMatch ? vehiculoMatch[1].trim() : '';
+
+  // Si no se usó "Vehículo:" explícito, pero la misma línea de la orden tiene el modelo del carro después del número
+  if (!rawVehiculo && ordenMatch) {
+    const fullMatchedStr = ordenMatch[0];
+    const indexAfterOrden = text.indexOf(fullMatchedStr) + fullMatchedStr.length;
+    const remainingLine = text.substring(indexAfterOrden).split('\n')[0].trim();
+    if (remainingLine) {
+      rawVehiculo = remainingLine.replace(/^#?\d*️⃣?\s*/, '').trim();
+    }
+  }
+
+  // Formatear la orden limpiamente (ej: 1687 -> OT-1687)
+  let ordenFormatted = rawOrden;
+  if (rawOrden && /^\d+$/.test(rawOrden)) {
+    ordenFormatted = `OT-${rawOrden}`;
+  } else if (rawOrden && !rawOrden.toUpperCase().startsWith('OT')) {
+    ordenFormatted = `OT-${rawOrden.toUpperCase()}`;
+  }
+
+  // Fallback si no viene etiqueta explícita de "Vehículo:" pero hay líneas de texto adicionales
+  if (!rawVehiculo && text.includes('\n')) {
+    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+    const nonOrdenLine = lines.find(l => !l.match(/orden|ot|nro/i));
+    if (nonOrdenLine) {
+      rawVehiculo = nonOrdenLine.replace(/^#?\d*️⃣?\s*/, '').trim();
+    }
+  }
+
+  const topicTitle = ordenFormatted && rawVehiculo 
+    ? `🚗 ${ordenFormatted} ${rawVehiculo}`
+    : (ordenFormatted ? `🚗 ${ordenFormatted}` : (rawVehiculo ? `🚗 ${rawVehiculo}` : '🚗 General'));
+
+  return {
+    orden: ordenFormatted || undefined,
+    vehiculo: rawVehiculo || undefined,
+    topicTitle
+  };
+}
+
 export async function processIntakeValidation(ctx: Context, text: string): Promise<boolean> {
   // 1. Verificar si el usuario está respondiendo a una orden manual pendiente
   const userId = ctx.from?.id;
   if (userId) {
     for (const [id, pending] of pendingIntakes.entries()) {
       if (pending.userId === userId && pending.state === 'AWAITING_MANUAL_ORDEN') {
-        const ordenManual = text.trim();
-        await finalizeIntakeCreation(ctx, pending, ordenManual);
+        const ordenManualInput = text.trim();
+        const ordenFormatted = /^\d+$/.test(ordenManualInput) ? `OT-${ordenManualInput}` : ordenManualInput.toUpperCase();
+        await finalizeIntakeCreation(ctx, pending, ordenFormatted);
         pendingIntakes.delete(id);
         return true;
       }
     }
   }
 
-  // 2. Condición de Activación: Debe contener "Vehículo:" o "Vehiculo:"
-  const vehiculoMatch = text.match(/veh[íi]culo:\s*([^\n]+)/i);
-  if (!vehiculoMatch) return false;
+  // 2. Extraer orden y vehículo con el analizador flexible
+  const parsed = extractOrderAndVehicle(text);
 
-  const vehiculoTexto = vehiculoMatch[1].trim();
+  // Si no se detectó ni vehículo ni orden, permitir que el mensaje continúe
+  if (!parsed.vehiculo && !parsed.orden) {
+    return false;
+  }
 
-  // 3. Evaluación de Datos: Verificar si incluye "Orden:" u "OT:"
-  const ordenMatch = text.match(/(?:orden|#?ot):\s*([^\n]+)/i);
-
-  if (ordenMatch && ordenMatch[1].trim()) {
-    // CASO A: VIENE COMPLETO
-    const ordenTexto = ordenMatch[1].trim();
-    await createIntakeTopicDirect(ctx, ordenTexto, vehiculoTexto);
+  if (parsed.orden && parsed.vehiculo) {
+    // CASO A: VIENE COMPLETO (Detectó Orden y Vehículo)
+    await createIntakeTopicDirect(ctx, parsed.orden, parsed.vehiculo, parsed.topicTitle);
     return true;
-  } else {
-    // CASO B: FALTA LA ORDEN (Mostrar menú de alerta e iteración)
+  } else if (parsed.vehiculo && !parsed.orden) {
+    // CASO B: FALTA LA ORDEN (Mostrar menú de alerta interactivo)
     const pendingId = `p_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
     if (ctx.from?.id && ctx.chat?.id) {
       pendingIntakes.set(pendingId, {
         id: pendingId,
-        vehiculo: vehiculoTexto,
+        vehiculo: parsed.vehiculo,
         originalText: text,
         userId: ctx.from.id,
         chatId: ctx.chat.id,
@@ -70,7 +120,7 @@ export async function processIntakeValidation(ctx: Context, text: string): Promi
     }
 
     await ctx.reply(
-      `⚠️ *DATOS INCOMPLETOS EN EL INGRESO*\n\n🚘 *Vehículo detectado:* \`${vehiculoTexto}\`\n❌ *Falta:* Número de Orden / OT.\n\nPor favor selecciona una opción para continuar con el registro:`,
+      `⚠️ *DATOS INCOMPLETOS EN EL INGRESO*\n\n🚘 *Vehículo detectado:* \`${parsed.vehiculo}\`\n❌ *Falta:* Número de Orden / OT.\n\nPor favor selecciona una opción para continuar:`,
       {
         parse_mode: 'Markdown',
         reply_parameters: ctx.message?.message_id ? { message_id: ctx.message.message_id } : undefined,
@@ -83,41 +133,37 @@ export async function processIntakeValidation(ctx: Context, text: string): Promi
     );
     return true;
   }
+
+  return false;
 }
 
-// ----------------------------------------------------
-// CREACIÓN DIRECTA (CASO COMPLETO)
-// ----------------------------------------------------
-async function createIntakeTopicDirect(ctx: Context, orden: string, vehiculo: string) {
-  const topicTitle = `🚗 ${orden} ${vehiculo}`;
-  const targetForumId = FORUM_THREADS.TALLER_FORO_DESTINO_ID; // -1003975478850
-  const notificationId = FORUM_THREADS.TALLER_ORIGEN_ID;      // -1003940815012
+async function createIntakeTopicDirect(ctx: Context, orden: string, vehiculo: string, topicTitle: string) {
+  const targetForumId = FORUM_THREADS.TALLER_FORO_DESTINO_ID; // -1003940815012 (Operaciones Foro Principal)
+  const notificationId = FORUM_THREADS.TALLER_ORIGEN_ID;      // -1003975478850 (Nube)
 
   try {
-    // Crear Tema en NUBE (-1003975478850)
     const newTopic = await ctx.telegram.createForumTopic(targetForumId, topicTitle);
     const threadId = newTopic.message_thread_id;
 
-    // Guardar en BD
     try {
       await supabase.from('vehicle_topics').insert([{ identifier: topicTitle, thread_id: threadId }]);
+      await supabase.from('vehicle_topics').insert([{ identifier: `${orden} ${vehiculo}`, thread_id: threadId }]);
+      await supabase.from('vehicle_topics').insert([{ identifier: orden, thread_id: threadId }]);
     } catch (e) {}
 
-    // Mensaje dentro del nuevo Tema en NUBE
     await ctx.telegram.sendMessage(
       targetForumId,
-      `📋 *Expediente de Ingreso Registrado*\n\n🚘 *Vehículo:* ${vehiculo}\n🆔 *Orden:* ${orden}\n⏱️ *Estado:* Tema activo en la Nube.`,
+      `📋 *Expediente de Ingreso Registrado*\n\n🚘 *Vehículo:* ${vehiculo}\n🆔 *Orden:* ${orden}\n⏱️ *Estado:* Tema activo para recepción de evidencia y reportes.`,
       { message_thread_id: threadId, parse_mode: 'Markdown' }
     );
 
-    // Mensaje de Notificación en Operaciones (-1003940815012)
     await ctx.telegram.sendMessage(
       notificationId,
-      `📢 *Nuevo Ingreso Validado*\n\n✅ *Tema Creado:* "${topicTitle}"\n📍 *Ubicación:* Grupo Nube (\`-1003975478850\`)\n🆔 *Hilo:* \`${threadId}\``,
+      `☁️ *NUBE - Nuevo Ingreso Registrado*\n\n✅ *Tema Creado en Operaciones:* "${topicTitle}"\n🆔 *Hilo ID:* \`${threadId}\``,
       { parse_mode: 'Markdown' }
     );
 
-    await ctx.reply(`✅ *Ingreso Validado y Tema Creado:* "${topicTitle}"`, { parse_mode: 'Markdown' });
+    await ctx.reply(`✅ *Ingreso Registrado y Tema Creado:* "${topicTitle}"`, { parse_mode: 'Markdown' });
 
   } catch (err: any) {
     console.error('Error al crear tema automático:', err);
@@ -125,13 +171,10 @@ async function createIntakeTopicDirect(ctx: Context, orden: string, vehiculo: st
   }
 }
 
-// ----------------------------------------------------
-// FINALIZAR CREACIÓN DESDE RESPUESTA MANUAL O TEMPORAL
-// ----------------------------------------------------
 async function finalizeIntakeCreation(ctx: Context, pending: PendingIntake, orden: string) {
   const topicTitle = `🚗 ${orden} ${pending.vehiculo}`;
-  const targetForumId = FORUM_THREADS.TALLER_FORO_DESTINO_ID; // -1003975478850
-  const notificationId = FORUM_THREADS.TALLER_ORIGEN_ID;      // -1003940815012
+  const targetForumId = FORUM_THREADS.TALLER_FORO_DESTINO_ID; // -1003940815012
+  const notificationId = FORUM_THREADS.TALLER_ORIGEN_ID;      // -1003975478850
 
   try {
     const newTopic = await ctx.telegram.createForumTopic(targetForumId, topicTitle);
@@ -139,21 +182,22 @@ async function finalizeIntakeCreation(ctx: Context, pending: PendingIntake, orde
 
     try {
       await supabase.from('vehicle_topics').insert([{ identifier: topicTitle, thread_id: threadId }]);
+      await supabase.from('vehicle_topics').insert([{ identifier: orden, thread_id: threadId }]);
     } catch (e) {}
 
     await ctx.telegram.sendMessage(
       targetForumId,
-      `📋 *Expediente de Ingreso Registrado*\n\n🚘 *Vehículo:* ${pending.vehiculo}\n🆔 *Orden:* ${orden}\n⏱️ *Estado:* Tema activo en la Nube.`,
+      `📋 *Expediente de Ingreso Registrado*\n\n🚘 *Vehículo:* ${pending.vehiculo}\n🆔 *Orden:* ${orden}\n⏱️ *Estado:* Tema activo para recepción de evidencia.`,
       { message_thread_id: threadId, parse_mode: 'Markdown' }
     );
 
     await ctx.telegram.sendMessage(
       notificationId,
-      `📢 *Nuevo Ingreso Procesado*\n\n✅ *Tema Creado:* "${topicTitle}"\n📍 *Ubicación:* Grupo Nube (\`-1003975478850\`)\n🆔 *Hilo:* \`${threadId}\``,
+      `☁️ *NUBE - Nuevo Ingreso Procesado*\n\n✅ *Tema Creado en Operaciones:* "${topicTitle}"\n🆔 *Hilo ID:* \`${threadId}\``,
       { parse_mode: 'Markdown' }
     );
 
-    await ctx.reply(`✅ *¡Registro Completado con éxito!*\n\n📌 *Tema Creado:* "${topicTitle}"\n🆔 *Hilo Nube:* \`${threadId}\``, { parse_mode: 'Markdown' });
+    await ctx.reply(`✅ *¡Registro Completado con éxito!*\n\n📌 *Tema Creado en Operaciones:* "${topicTitle}"\n🆔 *Hilo ID:* \`${threadId}\``, { parse_mode: 'Markdown' });
 
   } catch (err: any) {
     console.error('Error en finalizeIntakeCreation:', err);
@@ -161,11 +205,7 @@ async function finalizeIntakeCreation(ctx: Context, pending: PendingIntake, orde
   }
 }
 
-// ----------------------------------------------------
-// MANEJADORES DE ACCIONES DE LOS BOTONES
-// ----------------------------------------------------
 export function registerIntakeActionHandlers(bot: any) {
-  // Botón 1: Ingresar Orden Manual
   bot.action(/^INTAKE_MANUAL:(.+)$/, async (ctx: any) => {
     await ctx.answerCbQuery();
     const pendingId = ctx.match[1];
@@ -182,7 +222,6 @@ export function registerIntakeActionHandlers(bot: any) {
     );
   });
 
-  // Botón 2: Crear sin Orden (Temporal)
   bot.action(/^INTAKE_TEMP:(.+)$/, async (ctx: any) => {
     await ctx.answerCbQuery();
     const pendingId = ctx.match[1];
@@ -197,7 +236,6 @@ export function registerIntakeActionHandlers(bot: any) {
     pendingIntakes.delete(pendingId);
   });
 
-  // Botón 3: Cancelar Registro
   bot.action(/^INTAKE_CANCEL:(.+)$/, async (ctx: any) => {
     await ctx.answerCbQuery();
     const pendingId = ctx.match[1];
