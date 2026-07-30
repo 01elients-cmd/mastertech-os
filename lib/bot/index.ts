@@ -15,6 +15,7 @@ import { handleApprovalRequest, handleApproveAction, handleRejectAction } from '
 import { handleLogisticsCommand, handleExternalJobCommand, handleExternalReturnCommand } from './modules/logistics';
 import { handleWikiCommand, handleBriefingCommand, handleStandupCommand } from './modules/knowledge-briefing';
 import { sendOemProtocol } from './modules/sla-oem';
+import { handleCreateTopicCommand } from './modules/topic-creator';
 
 export const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN || '123456789:PlaceholderToken');
 
@@ -230,6 +231,8 @@ bot.command('retorno_externo', handleExternalReturnCommand);
 bot.command('wiki', handleWikiCommand);
 bot.command('briefing_direccion', handleBriefingCommand);
 bot.command('standup', handleStandupCommand);
+bot.command('crear_hilo', handleCreateTopicCommand);
+bot.command('crear_topic', handleCreateTopicCommand);
 
 bot.command('ingreso', async (ctx) => {
   try {
