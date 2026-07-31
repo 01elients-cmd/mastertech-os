@@ -15,25 +15,25 @@ export async function handleMediaRedirect(ctx: Context): Promise<void> {
   const parsed = extractOrderAndVehicle(textContent);
   const identifier = parsed.topicTitle;
 
-  // Buscar si ya existe un hilo previamente registrado en la BD
-  const threadId = await obtenerHiloDestino(parsed);
+  // Buscar o crear el hilo en la Nube (-1003975478850)
+  const threadId = await obtenerHiloDestino(ctx, parsed);
 
-  if (threadId && threadId !== 1) {
+  if (threadId) {
     try {
       await ctx.telegram.copyMessage(
-        FORUM_THREADS.TALLER_FORO_DESTINO_ID,
+        FORUM_THREADS.TALLER_FORO_DESTINO_ID, // -1003975478850 (Nube)
         ctx.chat.id,
         message.message_id,
         { message_thread_id: threadId }
       );
-      console.log(`Reporte '${identifier}' redireccionado al Hilo: ${threadId}.`);
+      console.log(`Reporte '${identifier}' redireccionado a la Nube al Hilo: ${threadId}.`);
     } catch (e) {
-      console.error(`Error al redireccionar el mensaje: ${e}`);
+      console.error(`Error al redireccionar el mensaje a la Nube: ${e}`);
     }
   }
 }
 
-async function obtenerHiloDestino(parsed: { orden?: string; vehiculo?: string; topicTitle: string }): Promise<number | null> {
+async function obtenerHiloDestino(ctx: Context, parsed: { orden?: string; vehiculo?: string; topicTitle: string }): Promise<number | null> {
   const candidates = [parsed.topicTitle, parsed.orden, parsed.vehiculo].filter(Boolean) as string[];
 
   for (const cand of candidates) {
@@ -49,6 +49,34 @@ async function obtenerHiloDestino(parsed: { orden?: string; vehiculo?: string; t
     }
   }
 
-  // NO crear nuevos temas/topics automáticamente en -1003940815012
+  // Si no existe, crear automáticamente el Topic del vehículo en la Nube (-1003975478850)
+  if (parsed.orden || parsed.vehiculo) {
+    try {
+      const nubeChatId = FORUM_THREADS.TALLER_FORO_DESTINO_ID; // -1003975478850
+      const nuevoTema = await ctx.telegram.createForumTopic(nubeChatId, parsed.topicTitle);
+      const threadId = nuevoTema.message_thread_id;
+
+      try {
+        await supabase.from('vehicle_topics').insert([
+          { identifier: parsed.topicTitle, thread_id: threadId },
+          { identifier: parsed.orden || parsed.topicTitle, thread_id: threadId }
+        ]);
+      } catch (e) {}
+
+      // Notificar de la creación en el Topic # General de Operaciones (-1003940815012, thread 1)
+      const operacionesChatId = FORUM_THREADS.TALLER_ORIGEN_ID; // -1003940815012
+      await ctx.telegram.sendMessage(
+        operacionesChatId,
+        `☁️ *NUBE - Nuevo Hilo Creado para Evidencia*\n\n✅ *Tema:* "${parsed.topicTitle}"\n🆔 *Hilo Nube:* \`${threadId}\``,
+        { message_thread_id: 1, parse_mode: 'Markdown' }
+      );
+
+      return threadId;
+    } catch (e) {
+      console.error('Error creando topic en Nube:', e);
+      return null;
+    }
+  }
+
   return null;
 }

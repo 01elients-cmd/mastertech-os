@@ -122,24 +122,38 @@ export async function processIntakeValidation(ctx: Context, text: string): Promi
   return false;
 }
 
-// Procesa el ingreso y envía la notificación EXPLÍCITAMENTE al Topic # General (ID Thread: 1) del grupo -1003940815012
+// Crea el Topic del Vehículo en NUBE (-1003975478850) y envía la notificación a # General (-1003940815012, thread 1)
 async function processIntakeDirect(ctx: Context, orden: string, vehiculo: string, topicTitle: string) {
-  const targetGroup = FORUM_THREADS.TALLER_FORO_DESTINO_ID; // -1003940815012
+  const nubeForumId = FORUM_THREADS.TALLER_FORO_DESTINO_ID; // -1003975478850 (Nube - Creación de Temas)
+  const operacionesNotificationGroup = FORUM_THREADS.TALLER_ORIGEN_ID; // -1003940815012 (Operaciones)
 
   try {
+    // 1. Crear Hilo/Topic en NUBE (-1003975478850)
+    const newTopic = await ctx.telegram.createForumTopic(nubeForumId, topicTitle);
+    const threadId = newTopic.message_thread_id;
+
+    // Guardar en BD para redirección de multimedia
     try {
-      await supabase.from('vehicle_topics').insert([{ identifier: topicTitle, thread_id: 1 }]);
-      await supabase.from('vehicle_topics').insert([{ identifier: orden, thread_id: 1 }]);
+      await supabase.from('vehicle_topics').insert([{ identifier: topicTitle, thread_id: threadId }]);
+      await supabase.from('vehicle_topics').insert([{ identifier: `${orden} ${vehiculo}`, thread_id: threadId }]);
+      await supabase.from('vehicle_topics').insert([{ identifier: orden, thread_id: threadId }]);
     } catch (e) {}
 
-    // Notificación limpia enviada EXPLÍCITAMENTE al Topic # General (thread_id: 1)
+    // Mensaje dentro del nuevo Tema en NUBE
     await ctx.telegram.sendMessage(
-      targetGroup,
-      `📋 *Expediente de Ingreso Registrado*\n\n🚘 *Vehículo:* ${vehiculo}\n🆔 *Orden:* ${orden}\n⏱️ *Estado:* Registrado en sistema.`,
+      nubeForumId,
+      `📋 *Expediente de Ingreso Registrado*\n\n🚘 *Vehículo:* ${vehiculo}\n🆔 *Orden:* ${orden}\n⏱️ *Estado:* Tema activo en la Nube.`,
+      { message_thread_id: threadId, parse_mode: 'Markdown' }
+    );
+
+    // 2. Notificación enviada al Topic # General (thread_id: 1) en Operaciones (-1003940815012)
+    await ctx.telegram.sendMessage(
+      operacionesNotificationGroup,
+      `☁️ *NUBE - Nuevo Ingreso Registrado*\n\n✅ *Tema Creado en la Nube:* "${topicTitle}"\n🆔 *Hilo ID Nube:* \`${threadId}\``,
       { message_thread_id: 1, parse_mode: 'Markdown' }
     );
 
-    await ctx.reply(`✅ *Ingreso Validado:* "${topicTitle}"`, { parse_mode: 'Markdown' });
+    await ctx.reply(`✅ *Ingreso Validado y Tema Creado en la Nube:* "${topicTitle}"`, { parse_mode: 'Markdown' });
 
   } catch (err: any) {
     console.error('Error al procesar ingreso:', err);
@@ -149,22 +163,31 @@ async function processIntakeDirect(ctx: Context, orden: string, vehiculo: string
 
 async function finalizeIntakeCreation(ctx: Context, pending: PendingIntake, orden: string) {
   const topicTitle = `🚗 ${orden} ${pending.vehiculo}`;
-  const targetGroup = FORUM_THREADS.TALLER_FORO_DESTINO_ID; // -1003940815012
+  const nubeForumId = FORUM_THREADS.TALLER_FORO_DESTINO_ID; // -1003975478850 (Nube)
+  const operacionesNotificationGroup = FORUM_THREADS.TALLER_ORIGEN_ID; // -1003940815012 (Operaciones)
 
   try {
+    const newTopic = await ctx.telegram.createForumTopic(nubeForumId, topicTitle);
+    const threadId = newTopic.message_thread_id;
+
     try {
-      await supabase.from('vehicle_topics').insert([{ identifier: topicTitle, thread_id: 1 }]);
-      await supabase.from('vehicle_topics').insert([{ identifier: orden, thread_id: 1 }]);
+      await supabase.from('vehicle_topics').insert([{ identifier: topicTitle, thread_id: threadId }]);
+      await supabase.from('vehicle_topics').insert([{ identifier: orden, thread_id: threadId }]);
     } catch (e) {}
 
-    // Notificación enviada EXPLÍCITAMENTE al Topic # General (thread_id: 1)
     await ctx.telegram.sendMessage(
-      targetGroup,
-      `📋 *Expediente de Ingreso Registrado*\n\n🚘 *Vehículo:* ${pending.vehiculo}\n🆔 *Orden:* ${orden}\n⏱️ *Estado:* Registrado en sistema.`,
+      nubeForumId,
+      `📋 *Expediente de Ingreso Registrado*\n\n🚘 *Vehículo:* ${pending.vehiculo}\n🆔 *Orden:* ${orden}\n⏱️ *Estado:* Tema activo en la Nube.`,
+      { message_thread_id: threadId, parse_mode: 'Markdown' }
+    );
+
+    await ctx.telegram.sendMessage(
+      operacionesNotificationGroup,
+      `☁️ *NUBE - Nuevo Ingreso Procesado*\n\n✅ *Tema Creado en la Nube:* "${topicTitle}"\n🆔 *Hilo ID Nube:* \`${threadId}\``,
       { message_thread_id: 1, parse_mode: 'Markdown' }
     );
 
-    await ctx.reply(`✅ *¡Registro Completado con éxito!*\n\n📌 *Expediente:* "${topicTitle}"`, { parse_mode: 'Markdown' });
+    await ctx.reply(`✅ *¡Registro Completado con éxito!*\n\n📌 *Tema Creado en Nube:* "${topicTitle}"`, { parse_mode: 'Markdown' });
 
   } catch (err: any) {
     console.error('Error en finalizeIntakeCreation:', err);
