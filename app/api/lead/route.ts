@@ -17,7 +17,6 @@ export async function POST(req: Request) {
     let servicioClean = servicioRaw;
     let fallaExtraer = body.falla || body.fault || body.motivo || body.detalles || '';
 
-    // Si el servicio viene concatenado con guión em (ej: "Línea de inspección gratuita — Error en tablero...")
     if (servicioRaw.includes('—')) {
       const parts = servicioRaw.split('—');
       servicioClean = parts[0].trim();
@@ -77,7 +76,7 @@ export async function POST(req: Request) {
       console.warn('Error al guardar cita en BD:', dbErr);
     }
 
-    // 6. Mensaje Formateado enviado EXPLÍCITAMENTE al Topic # General (ID Thread: 1) del grupo ID: -1003940815012
+    // 6. Mensaje Formateado enviado a Telegram con Fallback a prueba de error 400 Bad Request
     const token = process.env.TELEGRAM_BOT_TOKEN || '8970513614:AAGCdMrJTbIH1QmKCFXcIzv5QxPX86e_23U';
     const targetGroup = process.env.TALLER_ORIGEN_ID || '-1003940815012';
 
@@ -91,23 +90,38 @@ export async function POST(req: Request) {
       `Status: ${status}`;
 
     try {
-      await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      // Intentar enviar primero especificando message_thread_id: 1 (# General)
+      const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           chat_id: targetGroup,
-          message_thread_id: 1, // Topic # General (t.me/c/3940815012/1)
+          message_thread_id: 1,
           text: telegramMessage,
           parse_mode: 'Markdown'
         })
       });
+      const data = await res.json();
+
+      if (!data.ok) {
+        // Fallback si la API rechaza el thread id
+        await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: targetGroup,
+            text: telegramMessage,
+            parse_mode: 'Markdown'
+          })
+        });
+      }
     } catch (tgErr) {
       console.error('Error enviando notificación a Telegram:', tgErr);
     }
 
     return NextResponse.json({
       success: true,
-      message: 'Cita registrada y enviada al Topic # General de Telegram correctamente.',
+      message: 'Cita registrada y enviada a Telegram correctamente.',
       recordId
     });
 
