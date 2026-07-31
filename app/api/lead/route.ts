@@ -77,7 +77,7 @@ export async function POST(req: Request) {
       console.warn('Error al guardar cita en BD:', dbErr);
     }
 
-    // 6. Mensaje Formateado Exacto para Telegram sin duplicados
+    // 6. Mensaje Formateado enviado EXPLÍCITAMENTE al Topic # General (ID Thread: 1) del grupo ID: -1003940815012
     const token = process.env.TELEGRAM_BOT_TOKEN || '8970513614:AAGCdMrJTbIH1QmKCFXcIzv5QxPX86e_23U';
     const targetGroup = process.env.TALLER_ORIGEN_ID || '-1003940815012';
 
@@ -96,6 +96,7 @@ export async function POST(req: Request) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           chat_id: targetGroup,
+          message_thread_id: 1, // Topic # General (t.me/c/3940815012/1)
           text: telegramMessage,
           parse_mode: 'Markdown'
         })
@@ -106,7 +107,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       success: true,
-      message: 'Cita registrada y enviada a Telegram correctamente.',
+      message: 'Cita registrada y enviada al Topic # General de Telegram correctamente.',
       recordId
     });
 

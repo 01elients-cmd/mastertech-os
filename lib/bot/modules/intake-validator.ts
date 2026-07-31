@@ -122,22 +122,21 @@ export async function processIntakeValidation(ctx: Context, text: string): Promi
   return false;
 }
 
-// Procesa el ingreso y notifica en # General sin crear nuevos temas/topics en el grupo -1003940815012
+// Procesa el ingreso y envía la notificación EXPLÍCITAMENTE al Topic # General (ID Thread: 1) del grupo -1003940815012
 async function processIntakeDirect(ctx: Context, orden: string, vehiculo: string, topicTitle: string) {
   const targetGroup = FORUM_THREADS.TALLER_FORO_DESTINO_ID; // -1003940815012
 
   try {
-    // Guardar en BD para registro de recepción
     try {
       await supabase.from('vehicle_topics').insert([{ identifier: topicTitle, thread_id: 1 }]);
       await supabase.from('vehicle_topics').insert([{ identifier: orden, thread_id: 1 }]);
     } catch (e) {}
 
-    // Notificación limpia enviada directamente a # General
+    // Notificación limpia enviada EXPLÍCITAMENTE al Topic # General (thread_id: 1)
     await ctx.telegram.sendMessage(
       targetGroup,
       `📋 *Expediente de Ingreso Registrado*\n\n🚘 *Vehículo:* ${vehiculo}\n🆔 *Orden:* ${orden}\n⏱️ *Estado:* Registrado en sistema.`,
-      { parse_mode: 'Markdown' }
+      { message_thread_id: 1, parse_mode: 'Markdown' }
     );
 
     await ctx.reply(`✅ *Ingreso Validado:* "${topicTitle}"`, { parse_mode: 'Markdown' });
@@ -158,10 +157,11 @@ async function finalizeIntakeCreation(ctx: Context, pending: PendingIntake, orde
       await supabase.from('vehicle_topics').insert([{ identifier: orden, thread_id: 1 }]);
     } catch (e) {}
 
+    // Notificación enviada EXPLÍCITAMENTE al Topic # General (thread_id: 1)
     await ctx.telegram.sendMessage(
       targetGroup,
       `📋 *Expediente de Ingreso Registrado*\n\n🚘 *Vehículo:* ${pending.vehiculo}\n🆔 *Orden:* ${orden}\n⏱️ *Estado:* Registrado en sistema.`,
-      { parse_mode: 'Markdown' }
+      { message_thread_id: 1, parse_mode: 'Markdown' }
     );
 
     await ctx.reply(`✅ *¡Registro Completado con éxito!*\n\n📌 *Expediente:* "${topicTitle}"`, { parse_mode: 'Markdown' });
