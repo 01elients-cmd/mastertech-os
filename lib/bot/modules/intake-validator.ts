@@ -25,21 +25,13 @@ setInterval(() => {
   }
 }, 5 * 60 * 1000);
 
-/**
- * Extractor ultra-flexible de Orden de Servicio y Vehículo
- * Soporta escrituras rápidas de mecánicos: "Orden de servicio 1687", "Orden 1687", "OT 1687", "#OT1687", "Nro de orden 1687" sin exigir ':' ni '#'
- */
 export function extractOrderAndVehicle(text: string): { orden?: string; vehiculo?: string; topicTitle: string } {
-  // Regex flexible para capturar el número de orden en cualquier formato:
   const ordenMatch = text.match(/(?:#?\b(?:orden(?:\s+de\s+(?:servicio|trabajo))?|nro(?:\s+de)?\s+orden|ot)\b[:\s#]*)([a-z0-9-]+)/i);
-  
-  // Regex flexible para capturar el vehículo:
   const vehiculoMatch = text.match(/(?:veh[íi]culo|auto|carro)[:\s]*([^\n]+)/i);
 
   let rawOrden = ordenMatch ? ordenMatch[1].trim() : '';
   let rawVehiculo = vehiculoMatch ? vehiculoMatch[1].trim() : '';
 
-  // Si no se usó "Vehículo:" explícito, pero la misma línea de la orden tiene el modelo del carro después del número
   if (!rawVehiculo && ordenMatch) {
     const fullMatchedStr = ordenMatch[0];
     const indexAfterOrden = text.indexOf(fullMatchedStr) + fullMatchedStr.length;
@@ -49,7 +41,6 @@ export function extractOrderAndVehicle(text: string): { orden?: string; vehiculo
     }
   }
 
-  // Formatear la orden limpiamente (ej: 1687 -> OT-1687)
   let ordenFormatted = rawOrden;
   if (rawOrden && /^\d+$/.test(rawOrden)) {
     ordenFormatted = `OT-${rawOrden}`;
@@ -57,7 +48,6 @@ export function extractOrderAndVehicle(text: string): { orden?: string; vehiculo
     ordenFormatted = `OT-${rawOrden.toUpperCase()}`;
   }
 
-  // Fallback si no viene etiqueta explícita de "Vehículo:" pero hay líneas de texto adicionales
   if (!rawVehiculo && text.includes('\n')) {
     const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
     const nonOrdenLine = lines.find(l => !l.match(/orden|ot|nro/i));
@@ -78,7 +68,6 @@ export function extractOrderAndVehicle(text: string): { orden?: string; vehiculo
 }
 
 export async function processIntakeValidation(ctx: Context, text: string): Promise<boolean> {
-  // 1. Verificar si el usuario está respondiendo a una orden manual pendiente
   const userId = ctx.from?.id;
   if (userId) {
     for (const [id, pending] of pendingIntakes.entries()) {
@@ -92,20 +81,16 @@ export async function processIntakeValidation(ctx: Context, text: string): Promi
     }
   }
 
-  // 2. Extraer orden y vehículo con el analizador flexible
   const parsed = extractOrderAndVehicle(text);
 
-  // Si no se detectó ni vehículo ni orden, permitir que el mensaje continúe
   if (!parsed.vehiculo && !parsed.orden) {
     return false;
   }
 
   if (parsed.orden && parsed.vehiculo) {
-    // CASO A: VIENE COMPLETO (Detectó Orden y Vehículo)
-    await createIntakeTopicDirect(ctx, parsed.orden, parsed.vehiculo, parsed.topicTitle);
+    await processIntakeDirect(ctx, parsed.orden, parsed.vehiculo, parsed.topicTitle);
     return true;
   } else if (parsed.vehiculo && !parsed.orden) {
-    // CASO B: FALTA LA ORDEN (Mostrar menú de alerta interactivo)
     const pendingId = `p_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
     if (ctx.from?.id && ctx.chat?.id) {
       pendingIntakes.set(pendingId, {
@@ -126,7 +111,7 @@ export async function processIntakeValidation(ctx: Context, text: string): Promi
         reply_parameters: ctx.message?.message_id ? { message_id: ctx.message.message_id } : undefined,
         ...Markup.inlineKeyboard([
           [Markup.button.callback('✍️ Ingresar Orden Manual', `INTAKE_MANUAL:${pendingId}`)],
-          [Markup.button.callback('⚡ Crear sin Orden (Temporal)', `INTAKE_TEMP:${pendingId}`)],
+          [Markup.button.callback('⚡ Registrar sin Orden (Temporal)', `INTAKE_TEMP:${pendingId}`)],
           [Markup.button.callback('❌ Cancelar Registro', `INTAKE_CANCEL:${pendingId}`)]
         ])
       }
@@ -137,71 +122,53 @@ export async function processIntakeValidation(ctx: Context, text: string): Promi
   return false;
 }
 
-async function createIntakeTopicDirect(ctx: Context, orden: string, vehiculo: string, topicTitle: string) {
-  const targetForumId = FORUM_THREADS.TALLER_FORO_DESTINO_ID; // -1003940815012 (Operaciones Foro Principal)
-  const notificationId = FORUM_THREADS.TALLER_ORIGEN_ID;      // -1003975478850 (Nube)
+// Procesa el ingreso y notifica en # General sin crear nuevos temas/topics en el grupo -1003940815012
+async function processIntakeDirect(ctx: Context, orden: string, vehiculo: string, topicTitle: string) {
+  const targetGroup = FORUM_THREADS.TALLER_FORO_DESTINO_ID; // -1003940815012
 
   try {
-    const newTopic = await ctx.telegram.createForumTopic(targetForumId, topicTitle);
-    const threadId = newTopic.message_thread_id;
-
+    // Guardar en BD para registro de recepción
     try {
-      await supabase.from('vehicle_topics').insert([{ identifier: topicTitle, thread_id: threadId }]);
-      await supabase.from('vehicle_topics').insert([{ identifier: `${orden} ${vehiculo}`, thread_id: threadId }]);
-      await supabase.from('vehicle_topics').insert([{ identifier: orden, thread_id: threadId }]);
+      await supabase.from('vehicle_topics').insert([{ identifier: topicTitle, thread_id: 1 }]);
+      await supabase.from('vehicle_topics').insert([{ identifier: orden, thread_id: 1 }]);
     } catch (e) {}
 
+    // Notificación limpia enviada directamente a # General
     await ctx.telegram.sendMessage(
-      targetForumId,
-      `📋 *Expediente de Ingreso Registrado*\n\n🚘 *Vehículo:* ${vehiculo}\n🆔 *Orden:* ${orden}\n⏱️ *Estado:* Tema activo para recepción de evidencia y reportes.`,
-      { message_thread_id: threadId, parse_mode: 'Markdown' }
-    );
-
-    await ctx.telegram.sendMessage(
-      notificationId,
-      `☁️ *NUBE - Nuevo Ingreso Registrado*\n\n✅ *Tema Creado en Operaciones:* "${topicTitle}"\n🆔 *Hilo ID:* \`${threadId}\``,
+      targetGroup,
+      `📋 *Expediente de Ingreso Registrado*\n\n🚘 *Vehículo:* ${vehiculo}\n🆔 *Orden:* ${orden}\n⏱️ *Estado:* Registrado en sistema.`,
       { parse_mode: 'Markdown' }
     );
 
-    await ctx.reply(`✅ *Ingreso Registrado y Tema Creado:* "${topicTitle}"`, { parse_mode: 'Markdown' });
+    await ctx.reply(`✅ *Ingreso Validado:* "${topicTitle}"`, { parse_mode: 'Markdown' });
 
   } catch (err: any) {
-    console.error('Error al crear tema automático:', err);
-    await ctx.reply(`❌ *Error creando el tema:* ${err.message || 'Verifica permisos del bot.'}`, { parse_mode: 'Markdown' });
+    console.error('Error al procesar ingreso:', err);
+    await ctx.reply(`❌ *Error al registrar ingreso:* ${err.message || 'Verifica permisos del bot.'}`, { parse_mode: 'Markdown' });
   }
 }
 
 async function finalizeIntakeCreation(ctx: Context, pending: PendingIntake, orden: string) {
   const topicTitle = `🚗 ${orden} ${pending.vehiculo}`;
-  const targetForumId = FORUM_THREADS.TALLER_FORO_DESTINO_ID; // -1003940815012
-  const notificationId = FORUM_THREADS.TALLER_ORIGEN_ID;      // -1003975478850
+  const targetGroup = FORUM_THREADS.TALLER_FORO_DESTINO_ID; // -1003940815012
 
   try {
-    const newTopic = await ctx.telegram.createForumTopic(targetForumId, topicTitle);
-    const threadId = newTopic.message_thread_id;
-
     try {
-      await supabase.from('vehicle_topics').insert([{ identifier: topicTitle, thread_id: threadId }]);
-      await supabase.from('vehicle_topics').insert([{ identifier: orden, thread_id: threadId }]);
+      await supabase.from('vehicle_topics').insert([{ identifier: topicTitle, thread_id: 1 }]);
+      await supabase.from('vehicle_topics').insert([{ identifier: orden, thread_id: 1 }]);
     } catch (e) {}
 
     await ctx.telegram.sendMessage(
-      targetForumId,
-      `📋 *Expediente de Ingreso Registrado*\n\n🚘 *Vehículo:* ${pending.vehiculo}\n🆔 *Orden:* ${orden}\n⏱️ *Estado:* Tema activo para recepción de evidencia.`,
-      { message_thread_id: threadId, parse_mode: 'Markdown' }
-    );
-
-    await ctx.telegram.sendMessage(
-      notificationId,
-      `☁️ *NUBE - Nuevo Ingreso Procesado*\n\n✅ *Tema Creado en Operaciones:* "${topicTitle}"\n🆔 *Hilo ID:* \`${threadId}\``,
+      targetGroup,
+      `📋 *Expediente de Ingreso Registrado*\n\n🚘 *Vehículo:* ${pending.vehiculo}\n🆔 *Orden:* ${orden}\n⏱️ *Estado:* Registrado en sistema.`,
       { parse_mode: 'Markdown' }
     );
 
-    await ctx.reply(`✅ *¡Registro Completado con éxito!*\n\n📌 *Tema Creado en Operaciones:* "${topicTitle}"\n🆔 *Hilo ID:* \`${threadId}\``, { parse_mode: 'Markdown' });
+    await ctx.reply(`✅ *¡Registro Completado con éxito!*\n\n📌 *Expediente:* "${topicTitle}"`, { parse_mode: 'Markdown' });
 
   } catch (err: any) {
     console.error('Error en finalizeIntakeCreation:', err);
-    await ctx.reply(`❌ *Error al crear el tema:* ${err.message || 'Verifica permisos.'}`, { parse_mode: 'Markdown' });
+    await ctx.reply(`❌ *Error al registrar el expediente:* ${err.message || 'Verifica permisos.'}`, { parse_mode: 'Markdown' });
   }
 }
 
