@@ -1,7 +1,7 @@
 import type { Context } from 'telegraf';
 import { Markup } from 'telegraf';
 import { FORUM_THREADS } from '../constants';
-import { supabase } from '../supabase';
+import { findExistingThreadId, saveVehicleTopic } from '../topic-store';
 
 interface PendingIntake {
   id: string;
@@ -25,20 +25,13 @@ setInterval(() => {
   }
 }, 5 * 60 * 1000);
 
-/**
- * Extractor ultra-flexible de Orden de Servicio y Vehículo
- * Admite: "Orden: 1687", "Orden 1687", "OT 1687", "Orden: • Vehículo: FORD 1687", etc.
- */
 export function extractOrderAndVehicle(text: string): { orden?: string; vehiculo?: string; topicTitle: string } {
-  // 1. Capturar orden por palabras clave
   const ordenMatch = text.match(/(?:#?\b(?:orden(?:\s+de\s+(?:servicio|trabajo))?|nro(?:\s+de)?\s+orden|ot)\b[:\s#•]*)([a-z0-9-]+)/i);
   
   let rawOrden = ordenMatch ? ordenMatch[1].trim() : '';
 
-  // Limpiar si capturó viñetas o caracteres no alfanuméricos
   rawOrden = rawOrden.replace(/^[^a-z0-9]+/i, '').trim();
 
-  // 2. Si no capturó con la palabra clave pero hay un número de 3 a 6 dígitos en el mensaje
   if (!rawOrden) {
     const standaloneNumMatch = text.match(/\b([0-9]{3,6})\b/);
     if (standaloneNumMatch) {
@@ -46,7 +39,6 @@ export function extractOrderAndVehicle(text: string): { orden?: string; vehiculo
     }
   }
 
-  // 3. Capturar vehículo explícito
   const vehiculoMatch = text.match(/(?:veh[íi]culo|auto|carro)[:\s•]*([^\n•]+)/i);
   let rawVehiculo = vehiculoMatch ? vehiculoMatch[1].trim() : '';
 
@@ -59,7 +51,6 @@ export function extractOrderAndVehicle(text: string): { orden?: string; vehiculo
     }
   }
 
-  // Formatear Orden limpiamente (ej: 1687 -> OT-1687)
   let ordenFormatted = rawOrden;
   if (rawOrden && /^\d+$/.test(rawOrden)) {
     ordenFormatted = `OT-${rawOrden}`;
@@ -141,32 +132,41 @@ export async function processIntakeValidation(ctx: Context, text: string): Promi
   return false;
 }
 
-// Crea el Topic del Vehículo en NUBE (-1003975478850) y envía la notificación a Operaciones con fallback seguro
+// Verifica si la orden ya existe antes de crear un nuevo Tema en la Nube
 async function processIntakeDirect(ctx: Context, orden: string, vehiculo: string, topicTitle: string) {
   const nubeForumId = FORUM_THREADS.TALLER_FORO_DESTINO_ID; // -1003975478850 (Nube)
   const operacionesGroup = FORUM_THREADS.TALLER_ORIGEN_ID; // -1003940815012 (Operaciones)
 
   try {
-    const newTopic = await ctx.telegram.createForumTopic(nubeForumId, topicTitle);
-    const threadId = newTopic.message_thread_id;
+    // 1. VERIFICACIÓN ANTI-DUPLICADOS: Consultar en Memoria / JSON / Supabase si ya existe el Hilo
+    const existingThreadId = await findExistingThreadId(orden, vehiculo, topicTitle);
 
-    try {
-      await supabase.from('vehicle_topics').insert([{ identifier: topicTitle, thread_id: threadId }]);
-      await supabase.from('vehicle_topics').insert([{ identifier: `${orden} ${vehiculo}`, thread_id: threadId }]);
-      await supabase.from('vehicle_topics').insert([{ identifier: orden, thread_id: threadId }]);
-    } catch (e) {}
+    let threadId: number;
 
+    if (existingThreadId) {
+      console.log(`[AntiDuplicados] Hilo existente reutilizado para '${topicTitle}': Thread ID ${existingThreadId}`);
+      threadId = existingThreadId;
+    } else {
+      // Si NO existe, crear el Hilo en la Nube (-1003975478850)
+      const newTopic = await ctx.telegram.createForumTopic(nubeForumId, topicTitle);
+      threadId = newTopic.message_thread_id;
+
+      // Guardar inmediatamente en el almacenamiento híbrido
+      await saveVehicleTopic(threadId, topicTitle, orden, vehiculo);
+    }
+
+    // Mensaje dentro del Tema en NUBE
     await ctx.telegram.sendMessage(
       nubeForumId,
       `📋 *Expediente de Ingreso Registrado*\n\n🚘 *Vehículo:* ${vehiculo}\n🆔 *Orden:* ${orden}\n⏱️ *Estado:* Tema activo en la Nube.`,
       { message_thread_id: threadId, parse_mode: 'Markdown' }
     );
 
-    // Enviar notificación a Operaciones con fallback a prueba de errores 400 Bad Request
-    const notificationText = `☁️ *NUBE - Nuevo Ingreso Registrado*\n\n✅ *Tema Creado en la Nube:* "${topicTitle}"\n🆔 *Hilo ID Nube:* \`${threadId}\``;
+    // Notificación en Operaciones # General
+    const notificationText = `☁️ *NUBE - Ingreso Registrado*\n\n✅ *Tema en la Nube:* "${topicTitle}"\n🆔 *Hilo ID Nube:* \`${threadId}\``;
     await sendNotificationWithFallback(ctx, operacionesGroup, notificationText);
 
-    await ctx.reply(`✅ *Ingreso Validado y Tema Creado en la Nube:* "${topicTitle}"`, { parse_mode: 'Markdown' });
+    await ctx.reply(`✅ *Ingreso Registrado:* "${topicTitle}"`, { parse_mode: 'Markdown' });
 
   } catch (err: any) {
     console.error('Error al procesar ingreso:', err);
@@ -180,13 +180,16 @@ async function finalizeIntakeCreation(ctx: Context, pending: PendingIntake, orde
   const operacionesGroup = FORUM_THREADS.TALLER_ORIGEN_ID; // -1003940815012
 
   try {
-    const newTopic = await ctx.telegram.createForumTopic(nubeForumId, topicTitle);
-    const threadId = newTopic.message_thread_id;
+    const existingThreadId = await findExistingThreadId(orden, pending.vehiculo, topicTitle);
 
-    try {
-      await supabase.from('vehicle_topics').insert([{ identifier: topicTitle, thread_id: threadId }]);
-      await supabase.from('vehicle_topics').insert([{ identifier: orden, thread_id: threadId }]);
-    } catch (e) {}
+    let threadId: number;
+    if (existingThreadId) {
+      threadId = existingThreadId;
+    } else {
+      const newTopic = await ctx.telegram.createForumTopic(nubeForumId, topicTitle);
+      threadId = newTopic.message_thread_id;
+      await saveVehicleTopic(threadId, topicTitle, orden, pending.vehiculo);
+    }
 
     await ctx.telegram.sendMessage(
       nubeForumId,
@@ -194,10 +197,10 @@ async function finalizeIntakeCreation(ctx: Context, pending: PendingIntake, orde
       { message_thread_id: threadId, parse_mode: 'Markdown' }
     );
 
-    const notificationText = `☁️ *NUBE - Nuevo Ingreso Procesado*\n\n✅ *Tema Creado en la Nube:* "${topicTitle}"\n🆔 *Hilo ID Nube:* \`${threadId}\``;
+    const notificationText = `☁️ *NUBE - Ingreso Procesado*\n\n✅ *Tema en la Nube:* "${topicTitle}"\n🆔 *Hilo ID Nube:* \`${threadId}\``;
     await sendNotificationWithFallback(ctx, operacionesGroup, notificationText);
 
-    await ctx.reply(`✅ *¡Registro Completado con éxito!*\n\n📌 *Tema Creado en Nube:* "${topicTitle}"`, { parse_mode: 'Markdown' });
+    await ctx.reply(`✅ *¡Registro Completado con éxito!*\n\n📌 *Tema en Nube:* "${topicTitle}"`, { parse_mode: 'Markdown' });
 
   } catch (err: any) {
     console.error('Error en finalizeIntakeCreation:', err);
@@ -209,7 +212,6 @@ async function sendNotificationWithFallback(ctx: Context, chatId: number, text: 
   try {
     await ctx.telegram.sendMessage(chatId, text, { message_thread_id: 1, parse_mode: 'Markdown' });
   } catch (err: any) {
-    // Si la API de Telegram responde "message thread not found", intentar enviarlo sin message_thread_id
     try {
       await ctx.telegram.sendMessage(chatId, text, { parse_mode: 'Markdown' });
     } catch (e) {
