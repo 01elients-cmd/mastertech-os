@@ -1,6 +1,6 @@
 import type { Context } from 'telegraf';
 import { FORUM_THREADS } from '../constants';
-import { supabase } from '../supabase';
+import { saveVehicleTopic } from '../topic-store';
 
 export async function handleCreateTopicCommand(ctx: Context): Promise<void> {
   try {
@@ -9,42 +9,54 @@ export async function handleCreateTopicCommand(ctx: Context): Promise<void> {
 
     const args = message.text.split(/\s+/).slice(1);
     if (args.length === 0) {
-      await ctx.reply('⚠️ *Uso:* `/crear_hilo <Nombre del Tema>`\n\n*Ejemplo:* `/crear_hilo OT-5250 Toyota Corolla`', { parse_mode: 'Markdown' });
+      await ctx.reply(
+        '⚠️ *Uso:* `/crear <Nombre u Orden del Vehículo>`\n\n*Ejemplo:* `/crear OT-5250 Toyota Corolla`',
+        { parse_mode: 'Markdown' }
+      );
       return;
     }
 
-    const topicName = args.join(' ').trim();
+    const rawInput = args.join(' ').trim();
+    const topicName = rawInput.startsWith('🚗') ? rawInput : `🚗 ${rawInput}`;
 
     // 1. Crear el nuevo Tema / Hilo en el Foro de la Nube (ID: -1003975478850)
     const targetChatId = FORUM_THREADS.TALLER_FORO_DESTINO_ID; // -1003975478850
     const newTopic = await ctx.telegram.createForumTopic(targetChatId, topicName);
+    const threadId = newTopic.message_thread_id;
 
-    // Guardar en la base de datos para vinculación automática
+    // Guardar en la base de datos híbrida (Memoria + JSON + Supabase)
+    await saveVehicleTopic(threadId, topicName, rawInput, rawInput);
+
+    // 2. Enviar notificación al canal # General del grupo Operaciones (-1003940815012)
+    const notificationChatId = FORUM_THREADS.TALLER_ORIGEN_ID; // -1003940815012
+    const notificationText = `☁️ *NUBE - Nuevo Hilo Creado*\n\n✅ *Tema:* "${newTopic.name}"\n🆔 *ID de Hilo:* \`${threadId}\`\n\n📌 *Estado:* Activo en la Nube para recibir reportes y fotos.`;
+
     try {
-      await supabase
-        .from('vehicle_topics')
-        .insert([{ identifier: topicName, thread_id: newTopic.message_thread_id }]);
+      await ctx.telegram.sendMessage(notificationChatId, notificationText, {
+        message_thread_id: 1,
+        parse_mode: 'Markdown'
+      });
     } catch (e) {
-      console.warn('Advertencia guardando topic en BD:', e);
+      try {
+        await ctx.telegram.sendMessage(notificationChatId, notificationText, {
+          parse_mode: 'Markdown'
+        });
+      } catch (errNotif) {
+        console.warn('Advertencia enviando notificación a Operaciones:', errNotif);
+      }
     }
 
-    // 2. Enviar el mensaje de notificación de creación al Topic # General (ID Thread: 1) del grupo ID: -1003940815012
-    const notificationChatId = FORUM_THREADS.TALLER_ORIGEN_ID; // -1003940815012
-    await ctx.telegram.sendMessage(
-      notificationChatId,
-      `☁️ *NUBE - Sincronización Automática con el Foro*\n\n✅ *Nuevo Hilo Creado:* "${newTopic.name}"\n🆔 *ID de Hilo:* \`${newTopic.message_thread_id}\`\n\n📌 *Notificación:* El tema ha sido creado en la Nube y está activo para la sincronización de archivos.`,
-      { message_thread_id: 1, parse_mode: 'Markdown' }
+    // 3. Confirmar al usuario que invocó el comando /crear
+    await ctx.reply(
+      `✅ *Tema creado con éxito en la Nube!*\n\n📌 *Nombre:* "${newTopic.name}"\n🆔 *ID de Hilo:* \`${threadId}\``,
+      { parse_mode: 'Markdown' }
     );
-
-    // Responder también al usuario que invocó el comando
-    await ctx.reply(`✅ *Tema creado con éxito en la Nube (-1003975478850)!*\n\n📌 *Nombre:* ${newTopic.name}\n🆔 *ID del Hilo:* \`${newTopic.message_thread_id}\`\n📩 *Notificación enviada a # General en Operaciones.*`, {
-      parse_mode: 'Markdown'
-    });
 
   } catch (error: any) {
     console.error('Error al crear tema en el foro:', error);
-    await ctx.reply(`❌ *Error al crear el tema:* ${error.message || 'Verifica que el bot tenga permisos de Administrador para gestionar temas/hilos.'}`, {
-      parse_mode: 'Markdown'
-    });
+    await ctx.reply(
+      `❌ *Error al crear el tema:* ${error.message || 'Verifica permisos del bot.'}`,
+      { parse_mode: 'Markdown' }
+    );
   }
 }
