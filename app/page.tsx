@@ -10,6 +10,7 @@ import ConfigSettings from '@/components/ConfigSettings';
 import ModulesManager from '@/components/ModulesManager';
 import ChatWidget from '@/components/ChatWidget';
 import DVIManager from '@/components/DVIManager';
+import TopicsManager from '@/components/TopicsManager';
 import { DviReport } from '@/lib/dvi-store';
 import { 
   LayoutDashboard, 
@@ -24,7 +25,8 @@ import {
   X,
   Wrench,
   Package,
-  Bell
+  Bell,
+  FolderGit2
 } from 'lucide-react';
 
 export default function Dashboard() {
@@ -37,11 +39,21 @@ export default function Dashboard() {
   const [jornadas, setJornadas] = useState<Jornada[]>([]);
   const [templates, setTemplates] = useState<SopTemplate[]>([]);
   const [dviReports, setDviReports] = useState<DviReport[]>([]);
-  const [config, setConfig] = useState({
+  const [config, setConfig] = useState<{
+    NEXT_PUBLIC_SUPABASE_URL: string;
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: string;
+    SUPABASE_SERVICE_ROLE_KEY: string;
+    TELEGRAM_BOT_TOKEN: string;
+    TALLER_ORIGEN_ID?: string;
+    TALLER_FORO_DESTINO_ID?: string;
+    REQUIRE_MEDIA_CAPTION: string;
+  }>({
     NEXT_PUBLIC_SUPABASE_URL: '',
     NEXT_PUBLIC_SUPABASE_ANON_KEY: '',
     SUPABASE_SERVICE_ROLE_KEY: '',
     TELEGRAM_BOT_TOKEN: '',
+    TALLER_ORIGEN_ID: '-1003940815012',
+    TALLER_FORO_DESTINO_ID: '-1003975478850',
     REQUIRE_MEDIA_CAPTION: 'false',
   });
   const [status, setStatus] = useState({
@@ -191,6 +203,7 @@ export default function Dashboard() {
 
   const menuItems = [
     { id: 'dashboard', label: 'Panel General', icon: LayoutDashboard },
+    { id: 'topics', label: 'Hilos & Grupos Telegram', icon: FolderGit2 },
     { id: 'dvi', label: 'Inspecciones DVI (Semáforo)', icon: ShieldCheck },
     { id: 'ordenes', label: 'Órdenes y Aprobaciones', icon: Wrench },
     { id: 'inventario', label: 'Inventario', icon: Package },
@@ -322,6 +335,13 @@ export default function Dashboard() {
                   jornadas={jornadas}
                   onNavigateToTab={setActiveTab}
                   onCreateNewRecord={() => handleNavigateTab('registros')}
+                />
+              )}
+
+              {activeTab === 'topics' && (
+                <TopicsManager 
+                  config={config}
+                  onSaveConfig={handleSaveConfig}
                 />
               )}
 

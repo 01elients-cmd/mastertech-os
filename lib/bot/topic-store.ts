@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { supabase } from './supabase';
 
-interface VehicleTopicRecord {
+export interface VehicleTopicRecord {
   identifier: string;
   thread_id: number;
   created_at?: string;
@@ -18,7 +18,7 @@ function normalizeKey(str: string): string {
   if (!str) return '';
   return str
     .toUpperCase()
-    .replace(/[^A-Z0-9]/g, '') // Dejar solo letras y números (ej: "OT-1692" -> "OT1692", "1692" -> "1692")
+    .replace(/[^A-Z0-9]/g, '') // Dejar solo letras y números
     .trim();
 }
 
@@ -47,6 +47,47 @@ function writeLocalFallback(records: VehicleTopicRecord[]) {
   } catch (e) {
     console.error('Error guardando vehicle_topics en database_fallback.json:', e);
   }
+}
+
+/**
+ * Obtiene todos los temas/hilos registrados
+ */
+export async function getAllVehicleTopics(): Promise<VehicleTopicRecord[]> {
+  const local = readLocalFallback();
+  try {
+    const { data } = await supabase.from('vehicle_topics').select('*');
+    if (data && data.length > 0) {
+      // Combinar sin duplicados
+      const merged = [...local];
+      data.forEach(r => {
+        if (!merged.some(m => m.thread_id === r.thread_id && m.identifier === r.identifier)) {
+          merged.push(r);
+        }
+      });
+      return merged;
+    }
+  } catch (e) {}
+
+  return local;
+}
+
+/**
+ * Elimina un registro de topic
+ */
+export async function deleteVehicleTopic(threadId: number): Promise<void> {
+  // Limpiar memoria
+  for (const [k, v] of memoryTopicCache.entries()) {
+    if (v === threadId) memoryTopicCache.delete(k);
+  }
+
+  // Limpiar JSON Local
+  const local = readLocalFallback().filter(r => r.thread_id !== threadId);
+  writeLocalFallback(local);
+
+  // Limpiar Supabase
+  try {
+    await supabase.from('vehicle_topics').delete().eq('thread_id', threadId);
+  } catch (e) {}
 }
 
 /**
@@ -103,7 +144,7 @@ export async function findExistingThreadId(orden?: string, vehiculo?: string, to
       }
     }
   } catch (e) {
-    // Si Supabase falla o no está conectado, no bloquea el sistema
+    // Si Supabase falla o no está conectado
   }
 
   return null;
