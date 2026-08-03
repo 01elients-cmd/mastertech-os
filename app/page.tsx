@@ -9,6 +9,8 @@ import TemplateEditor from '@/components/TemplateEditor';
 import ConfigSettings from '@/components/ConfigSettings';
 import ModulesManager from '@/components/ModulesManager';
 import ChatWidget from '@/components/ChatWidget';
+import DVIManager from '@/components/DVIManager';
+import { DviReport } from '@/lib/dvi-store';
 import { 
   LayoutDashboard, 
   Clock, 
@@ -34,6 +36,7 @@ export default function Dashboard() {
   const [records, setRecords] = useState<SopRecord[]>([]);
   const [jornadas, setJornadas] = useState<Jornada[]>([]);
   const [templates, setTemplates] = useState<SopTemplate[]>([]);
+  const [dviReports, setDviReports] = useState<DviReport[]>([]);
   const [config, setConfig] = useState({
     NEXT_PUBLIC_SUPABASE_URL: '',
     NEXT_PUBLIC_SUPABASE_ANON_KEY: '',
@@ -54,11 +57,12 @@ export default function Dashboard() {
     setLoading(true);
     try {
       // Parallel fetches for speed
-      const [configRes, templatesRes, recordsRes, jornadasRes] = await Promise.all([
+      const [configRes, templatesRes, recordsRes, jornadasRes, dviRes] = await Promise.all([
         fetch('/api/dashboard/config').then(r => r.json()),
         fetch('/api/dashboard/templates').then(r => r.json()),
         fetch('/api/dashboard/records').then(r => r.json()),
         fetch('/api/dashboard/jornadas').then(r => r.json()),
+        fetch('/api/dashboard/dvi').then(r => r.json()),
       ]);
 
       if (configRes.config) setConfig(configRes.config);
@@ -66,6 +70,7 @@ export default function Dashboard() {
       if (templatesRes.templates) setTemplates(templatesRes.templates);
       if (recordsRes.records) setRecords(recordsRes.records);
       if (jornadasRes.jornadas) setJornadas(jornadasRes.jornadas);
+      if (dviRes.reports) setDviReports(dviRes.reports);
       
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
@@ -155,10 +160,27 @@ export default function Dashboard() {
     if (!res.ok) throw new Error('Failed to save configuration');
     setConfig(newConfig);
     
-    // Trigger config reload test in API after brief delay
     setTimeout(() => {
       fetchData();
     }, 1000);
+  };
+
+  const handleSaveDvi = async (reportData: Partial<DviReport> & { notifyTelegram?: boolean }) => {
+    const res = await fetch('/api/dashboard/dvi', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(reportData),
+    });
+    if (!res.ok) throw new Error('Failed to save DVI report');
+    fetchData();
+  };
+
+  const handleDeleteDvi = async (id: string) => {
+    const res = await fetch(`/api/dashboard/dvi?id=${id}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) throw new Error('Failed to delete DVI report');
+    setDviReports(prev => prev.filter(r => r.id !== id));
   };
 
   // Navigations shorthand
@@ -169,6 +191,7 @@ export default function Dashboard() {
 
   const menuItems = [
     { id: 'dashboard', label: 'Panel General', icon: LayoutDashboard },
+    { id: 'dvi', label: 'Inspecciones DVI (Semáforo)', icon: ShieldCheck },
     { id: 'ordenes', label: 'Órdenes y Aprobaciones', icon: Wrench },
     { id: 'inventario', label: 'Inventario', icon: Package },
     { id: 'alertas', label: 'Alertas y Logística', icon: Bell },
@@ -299,6 +322,15 @@ export default function Dashboard() {
                   jornadas={jornadas}
                   onNavigateToTab={setActiveTab}
                   onCreateNewRecord={() => handleNavigateTab('registros')}
+                />
+              )}
+
+              {activeTab === 'dvi' && (
+                <DVIManager 
+                  reports={dviReports}
+                  onSaveDvi={handleSaveDvi}
+                  onDeleteDvi={handleDeleteDvi}
+                  onRefresh={fetchData}
                 />
               )}
 
