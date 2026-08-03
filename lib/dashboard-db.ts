@@ -190,24 +190,28 @@ ORDEN #5201 - Toyota Corolla 2018: Al desmontar la muela derecha, se detectó el
   };
 }
 
+let inMemoryDB: LocalDB | null = null;
+
 // Read local JSON file DB
 export function readLocalDB(): LocalDB {
+  if (inMemoryDB) return inMemoryDB;
   try {
-    if (!fs.existsSync(fallbackPath)) {
-      const initial = getInitialData();
-      writeLocalDB(initial);
-      return initial;
+    if (fs.existsSync(fallbackPath)) {
+      const raw = fs.readFileSync(fallbackPath, 'utf8');
+      inMemoryDB = JSON.parse(raw);
+      return inMemoryDB!;
     }
-    const raw = fs.readFileSync(fallbackPath, 'utf8');
-    return JSON.parse(raw);
   } catch (err) {
     console.error('Error reading local fallback db:', err);
-    return getInitialData();
   }
+  inMemoryDB = getInitialData();
+  writeLocalDB(inMemoryDB);
+  return inMemoryDB;
 }
 
 // Write local JSON file DB
 export function writeLocalDB(data: LocalDB) {
+  inMemoryDB = data;
   try {
     const parentDir = path.dirname(fallbackPath);
     if (!fs.existsSync(parentDir)) {
@@ -229,27 +233,38 @@ export function getSupabaseClient() {
 
 // Hybrid operation functions helper
 export async function dbGetTemplates(): Promise<SopTemplate[]> {
+  const localDB = readLocalDB();
   const defaults = getInitialData().sops_templates;
-  const supabase = getSupabaseClient();
   
+  // 1. Combinar plantillas por defecto con las modificadas localmente
+  const baseTemplates = defaults.map(def => {
+    const localFound = localDB.sops_templates.find(l => l.key === def.key);
+    return localFound ? localFound : def;
+  });
+
+  localDB.sops_templates.forEach(l => {
+    if (!baseTemplates.some(b => b.key === l.key)) {
+      baseTemplates.push(l);
+    }
+  });
+
+  const supabase = getSupabaseClient();
   if (supabase) {
     try {
       const { data, error } = await supabase.from('sops_templates').select('*');
-      if (!error && data) {
-        // Merge Supabase templates on top of default ones
+      if (!error && data && data.length > 0) {
         const remoteTemplates = data as SopTemplate[];
-        const merged = defaults.map(def => {
-          const found = remoteTemplates.find(r => r.key === def.key);
-          return found ? found : def;
+        const merged = baseTemplates.map(base => {
+          const found = remoteTemplates.find(r => r.key === base.key);
+          return found ? found : base;
         });
-        
-        // Append any extra keys defined in Supabase that are not in defaults
+
         remoteTemplates.forEach(r => {
           if (!merged.some(m => m.key === r.key)) {
             merged.push(r);
           }
         });
-        
+
         return merged;
       } else if (error) {
         console.error('Supabase get templates error:', error.message);
@@ -258,25 +273,15 @@ export async function dbGetTemplates(): Promise<SopTemplate[]> {
       console.warn('Supabase templates fetch failed, falling back to local file:', e);
     }
   }
-  return readLocalDB().sops_templates;
+
+  return baseTemplates;
 }
 
 export async function dbUpsertTemplate(key: string, title: string, content: string, category: string): Promise<SopTemplate> {
   const updated_at = new Date().toISOString();
   const templateObj = { key, title, content, category, updated_at };
   
-  const supabase = getSupabaseClient();
-  if (supabase) {
-    try {
-      const { error } = await supabase.from('sops_templates').upsert(templateObj, { onConflict: 'key' });
-      if (!error) return templateObj;
-      console.error('Supabase upsert template error:', error);
-    } catch (e) {
-      console.error('Supabase upsert template exception:', e);
-    }
-  }
-
-  // Fallback to local
+  // 1. Guardar de forma garantizada en memoria y JSON local
   const db = readLocalDB();
   const index = db.sops_templates.findIndex((t) => t.key === key);
   if (index >= 0) {
@@ -285,6 +290,20 @@ export async function dbUpsertTemplate(key: string, title: string, content: stri
     db.sops_templates.push(templateObj);
   }
   writeLocalDB(db);
+
+  // 2. Guardar también en Supabase si está conectado
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      const { error } = await supabase.from('sops_templates').upsert(templateObj, { onConflict: 'key' });
+      if (error) {
+        console.error('Supabase upsert template error:', error);
+      }
+    } catch (e) {
+      console.error('Supabase upsert template exception:', e);
+    }
+  }
+
   return templateObj;
 }
 

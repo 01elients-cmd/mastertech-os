@@ -232,6 +232,9 @@ bot.command('retorno_externo', handleExternalReturnCommand);
 bot.command('wiki', handleWikiCommand);
 bot.command('briefing_direccion', handleBriefingCommand);
 bot.command('standup', handleStandupCommand);
+bot.command('crear', handleCreateTopicCommand);
+bot.command('hilo', handleCreateTopicCommand);
+bot.command('crearhilo', handleCreateTopicCommand);
 bot.command('crear_hilo', handleCreateTopicCommand);
 bot.command('crear_topic', handleCreateTopicCommand);
 

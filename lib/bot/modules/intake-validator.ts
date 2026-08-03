@@ -47,7 +47,11 @@ export function extractOrderAndVehicle(text: string): { orden?: string; vehiculo
     const indexAfterOrden = text.indexOf(fullMatchedStr) + fullMatchedStr.length;
     const remainingLine = text.substring(indexAfterOrden).split('\n')[0].trim();
     if (remainingLine) {
-      rawVehiculo = remainingLine.replace(/^[•#\s\d*️⃣]+/, '').replace(/^[:\s•]+/, '').trim();
+      // Limpiar texto largo o comentarios adicionales
+      const cleanLine = remainingLine.replace(/^[•#\s\d*️⃣]+/, '').replace(/^[:\s•]+/, '').trim();
+      if (cleanLine.length < 35) {
+        rawVehiculo = cleanLine;
+      }
     }
   }
 
@@ -56,14 +60,6 @@ export function extractOrderAndVehicle(text: string): { orden?: string; vehiculo
     ordenFormatted = `OT-${rawOrden}`;
   } else if (rawOrden && !rawOrden.toUpperCase().startsWith('OT')) {
     ordenFormatted = `OT-${rawOrden.toUpperCase()}`;
-  }
-
-  if (!rawVehiculo && text.includes('\n')) {
-    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-    const nonOrdenLine = lines.find(l => !l.match(/orden|ot|nro/i));
-    if (nonOrdenLine) {
-      rawVehiculo = nonOrdenLine.replace(/^[•#\s\d*️⃣]+/, '').trim();
-    }
   }
 
   const topicTitle = ordenFormatted && rawVehiculo 
@@ -77,6 +73,11 @@ export function extractOrderAndVehicle(text: string): { orden?: string; vehiculo
   };
 }
 
+/**
+ * Validador de mensajes: NO crea temas automáticos en el chat.
+ * Si detecta una orden existente en BD, registra la información.
+ * Si es una orden nueva, solicita confirmación explícita mediante un botón antes de crear un tema.
+ */
 export async function processIntakeValidation(ctx: Context, text: string): Promise<boolean> {
   const userId = ctx.from?.id;
   if (userId) {
@@ -84,7 +85,7 @@ export async function processIntakeValidation(ctx: Context, text: string): Promi
       if (pending.userId === userId && pending.state === 'AWAITING_MANUAL_ORDEN') {
         const ordenManualInput = text.trim();
         const ordenFormatted = /^\d+$/.test(ordenManualInput) ? `OT-${ordenManualInput}` : ordenManualInput.toUpperCase();
-        await finalizeIntakeCreation(ctx, pending, ordenFormatted);
+        await createIntakeTopicDirect(ctx, ordenFormatted, pending.vehiculo, `🚗 ${ordenFormatted} ${pending.vehiculo}`);
         pendingIntakes.delete(id);
         return true;
       }
@@ -93,19 +94,25 @@ export async function processIntakeValidation(ctx: Context, text: string): Promi
 
   const parsed = extractOrderAndVehicle(text);
 
-  if (!parsed.vehiculo && !parsed.orden) {
+  if (!parsed.orden && !parsed.vehiculo) {
     return false;
   }
 
-  if (parsed.orden && parsed.vehiculo) {
-    await processIntakeDirect(ctx, parsed.orden, parsed.vehiculo, parsed.topicTitle);
-    return true;
-  } else if (parsed.vehiculo && !parsed.orden) {
-    const pendingId = `p_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+  // Verificar si la orden ya existe en el sistema
+  const existingThreadId = await findExistingThreadId(parsed.orden, parsed.vehiculo, parsed.topicTitle);
+  if (existingThreadId) {
+    // Si ya existe, NO crea un tema nuevo; simplemente registra la evidencia en el hilo existente
+    console.log(`[IntakeValidator] Orden ${parsed.orden} ya existe en Hilo ID: ${existingThreadId}`);
+    return false;
+  }
+
+  // Si la orden NO existe, pedir confirmación manual con botón (Evita creación automática descontrolada)
+  if (parsed.orden) {
+    const pendingId = `confirm_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
     if (ctx.from?.id && ctx.chat?.id) {
       pendingIntakes.set(pendingId, {
         id: pendingId,
-        vehiculo: parsed.vehiculo,
+        vehiculo: parsed.vehiculo || 'Vehículo',
         originalText: text,
         userId: ctx.from.id,
         chatId: ctx.chat.id,
@@ -115,14 +122,14 @@ export async function processIntakeValidation(ctx: Context, text: string): Promi
     }
 
     await ctx.reply(
-      `⚠️ *DATOS INCOMPLETOS EN EL INGRESO*\n\n🚘 *Vehículo detectado:* \`${parsed.vehiculo}\`\n❌ *Falta:* Número de Orden / OT.\n\nPor favor selecciona una opción para continuar:`,
+      `📌 *DETECCIÓN DE ORDEN DE SERVICIO*\n\n🆔 *Orden:* \`${parsed.orden}\`\n🚘 *Vehículo:* \`${parsed.vehiculo || 'Sin especificar'}\`\n\n¿Deseas crear un nuevo Hilo/Topic para este vehículo en la Nube?`,
       {
         parse_mode: 'Markdown',
         reply_parameters: ctx.message?.message_id ? { message_id: ctx.message.message_id } : undefined,
         ...Markup.inlineKeyboard([
-          [Markup.button.callback('✍️ Ingresar Orden Manual', `INTAKE_MANUAL:${pendingId}`)],
-          [Markup.button.callback('⚡ Registrar sin Orden (Temporal)', `INTAKE_TEMP:${pendingId}`)],
-          [Markup.button.callback('❌ Cancelar Registro', `INTAKE_CANCEL:${pendingId}`)]
+          [Markup.button.callback(`➕ Confirmar Creación: ${parsed.orden}`, `CONFIRM_CREATE:${pendingId}`)],
+          [Markup.button.callback('✍️ Editar Orden / Vehículo', `INTAKE_MANUAL:${pendingId}`)],
+          [Markup.button.callback('❌ Omitir (No Crear)', `INTAKE_CANCEL:${pendingId}`)]
         ])
       }
     );
@@ -132,79 +139,37 @@ export async function processIntakeValidation(ctx: Context, text: string): Promi
   return false;
 }
 
-// Verifica si la orden ya existe antes de crear un nuevo Tema en la Nube
-async function processIntakeDirect(ctx: Context, orden: string, vehiculo: string, topicTitle: string) {
+// Crea explícitamente el Topic en la Nube sólo cuando el usuario lo confirma
+export async function createIntakeTopicDirect(ctx: Context, orden: string, vehiculo: string, topicTitle: string) {
   const nubeForumId = FORUM_THREADS.TALLER_FORO_DESTINO_ID; // -1003975478850 (Nube)
   const operacionesGroup = FORUM_THREADS.TALLER_ORIGEN_ID; // -1003940815012 (Operaciones)
 
   try {
-    // 1. VERIFICACIÓN ANTI-DUPLICADOS: Consultar en Memoria / JSON / Supabase si ya existe el Hilo
     const existingThreadId = await findExistingThreadId(orden, vehiculo, topicTitle);
 
     let threadId: number;
-
     if (existingThreadId) {
-      console.log(`[AntiDuplicados] Hilo existente reutilizado para '${topicTitle}': Thread ID ${existingThreadId}`);
       threadId = existingThreadId;
     } else {
-      // Si NO existe, crear el Hilo en la Nube (-1003975478850)
       const newTopic = await ctx.telegram.createForumTopic(nubeForumId, topicTitle);
       threadId = newTopic.message_thread_id;
-
-      // Guardar inmediatamente en el almacenamiento híbrido
       await saveVehicleTopic(threadId, topicTitle, orden, vehiculo);
     }
 
-    // Mensaje dentro del Tema en NUBE
     await ctx.telegram.sendMessage(
       nubeForumId,
       `📋 *Expediente de Ingreso Registrado*\n\n🚘 *Vehículo:* ${vehiculo}\n🆔 *Orden:* ${orden}\n⏱️ *Estado:* Tema activo en la Nube.`,
       { message_thread_id: threadId, parse_mode: 'Markdown' }
     );
 
-    // Notificación en Operaciones # General
-    const notificationText = `☁️ *NUBE - Ingreso Registrado*\n\n✅ *Tema en la Nube:* "${topicTitle}"\n🆔 *Hilo ID Nube:* \`${threadId}\``;
+    const notificationText = `☁️ *NUBE - Nuevo Hilo Creado*\n\n✅ *Tema en la Nube:* "${topicTitle}"\n🆔 *Hilo ID Nube:* \`${threadId}\``;
     await sendNotificationWithFallback(ctx, operacionesGroup, notificationText);
 
-    await ctx.reply(`✅ *Ingreso Registrado:* "${topicTitle}"`, { parse_mode: 'Markdown' });
+    await ctx.reply(`✅ *Tema creado con éxito en la Nube:* "${topicTitle}"`, { parse_mode: 'Markdown' });
 
   } catch (err: any) {
-    console.error('Error al procesar ingreso:', err);
-    await ctx.reply(`❌ *Error al registrar ingreso:* ${err.message || 'Verifica permisos del bot.'}`, { parse_mode: 'Markdown' });
-  }
-}
-
-async function finalizeIntakeCreation(ctx: Context, pending: PendingIntake, orden: string) {
-  const topicTitle = `🚗 ${orden} ${pending.vehiculo}`;
-  const nubeForumId = FORUM_THREADS.TALLER_FORO_DESTINO_ID; // -1003975478850
-  const operacionesGroup = FORUM_THREADS.TALLER_ORIGEN_ID; // -1003940815012
-
-  try {
-    const existingThreadId = await findExistingThreadId(orden, pending.vehiculo, topicTitle);
-
-    let threadId: number;
-    if (existingThreadId) {
-      threadId = existingThreadId;
-    } else {
-      const newTopic = await ctx.telegram.createForumTopic(nubeForumId, topicTitle);
-      threadId = newTopic.message_thread_id;
-      await saveVehicleTopic(threadId, topicTitle, orden, pending.vehiculo);
-    }
-
-    await ctx.telegram.sendMessage(
-      nubeForumId,
-      `📋 *Expediente de Ingreso Registrado*\n\n🚘 *Vehículo:* ${pending.vehiculo}\n🆔 *Orden:* ${orden}\n⏱️ *Estado:* Tema activo en la Nube.`,
-      { message_thread_id: threadId, parse_mode: 'Markdown' }
-    );
-
-    const notificationText = `☁️ *NUBE - Ingreso Procesado*\n\n✅ *Tema en la Nube:* "${topicTitle}"\n🆔 *Hilo ID Nube:* \`${threadId}\``;
-    await sendNotificationWithFallback(ctx, operacionesGroup, notificationText);
-
-    await ctx.reply(`✅ *¡Registro Completado con éxito!*\n\n📌 *Tema en Nube:* "${topicTitle}"`, { parse_mode: 'Markdown' });
-
-  } catch (err: any) {
-    console.error('Error en finalizeIntakeCreation:', err);
-    await ctx.reply(`❌ *Error al registrar el expediente:* ${err.message || 'Verifica permisos.'}`, { parse_mode: 'Markdown' });
+    console.error('Error al crear tema:', err);
+    await ctx.reply(`❌ *Error al crear el tema:* ${err.message || 'Verifica permisos del bot.'}`, { parse_mode: 'Markdown' });
   }
 }
 
@@ -221,6 +186,21 @@ async function sendNotificationWithFallback(ctx: Context, chatId: number, text: 
 }
 
 export function registerIntakeActionHandlers(bot: any) {
+  // Confirmar creación manual por botón
+  bot.action(/^CONFIRM_CREATE:(.+)$/, async (ctx: any) => {
+    await ctx.answerCbQuery();
+    const pendingId = ctx.match[1];
+    const pending = pendingIntakes.get(pendingId);
+
+    if (!pending) {
+      return ctx.reply('⚠️ Esta solicitud expiró o ya fue procesada.');
+    }
+
+    const parsed = extractOrderAndVehicle(pending.originalText);
+    await createIntakeTopicDirect(ctx, parsed.orden || 'OT-NUEVO', pending.vehiculo, parsed.topicTitle);
+    pendingIntakes.delete(pendingId);
+  });
+
   bot.action(/^INTAKE_MANUAL:(.+)$/, async (ctx: any) => {
     await ctx.answerCbQuery();
     const pendingId = ctx.match[1];
@@ -237,29 +217,15 @@ export function registerIntakeActionHandlers(bot: any) {
     );
   });
 
-  bot.action(/^INTAKE_TEMP:(.+)$/, async (ctx: any) => {
-    await ctx.answerCbQuery();
-    const pendingId = ctx.match[1];
-    const pending = pendingIntakes.get(pendingId);
-
-    if (!pending) {
-      return ctx.reply('⚠️ Esta solicitud expiró o ya fue procesada.');
-    }
-
-    const tempOrden = `OT-TEMP-${Math.floor(1000 + Math.random() * 9000)}`;
-    await finalizeIntakeCreation(ctx, pending, tempOrden);
-    pendingIntakes.delete(pendingId);
-  });
-
   bot.action(/^INTAKE_CANCEL:(.+)$/, async (ctx: any) => {
     await ctx.answerCbQuery();
     const pendingId = ctx.match[1];
     pendingIntakes.delete(pendingId);
 
     try {
-      await ctx.editMessageText('❌ *Solicitud de Registro Cancelada.*', { parse_mode: 'Markdown' });
+      await ctx.editMessageText('❌ *Creación de Hilo Omitida.*', { parse_mode: 'Markdown' });
     } catch (e) {
-      await ctx.reply('❌ *Solicitud de Registro Cancelada.*', { parse_mode: 'Markdown' });
+      await ctx.reply('❌ *Creación de Hilo Omitida.*', { parse_mode: 'Markdown' });
     }
   });
 }
