@@ -9,15 +9,24 @@ import {
   RefreshCw, 
   CheckCircle2, 
   Cloud, 
-  ExternalLink,
   MessageSquare,
-  ShieldCheck,
-  Save
+  Save,
+  ChevronDown,
+  ChevronUp,
+  Tag,
+  Car
 } from 'lucide-react';
 
 interface VehicleTopic {
   identifier: string;
   thread_id: number;
+  created_at?: string;
+}
+
+interface GroupedTopic {
+  thread_id: number;
+  mainTitle: string;
+  aliases: string[];
   created_at?: string;
 }
 
@@ -34,6 +43,7 @@ export default function TopicsManager({ config, onSaveConfig }: TopicsManagerPro
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [isCreating, setIsCreating] = useState(false);
+  const [expandedThreadId, setExpandedThreadId] = useState<number | null>(null);
 
   // Formulario de creación
   const [newTitle, setNewTitle] = useState('');
@@ -96,7 +106,7 @@ export default function TopicsManager({ config, onSaveConfig }: TopicsManagerPro
   };
 
   const handleDeleteTopic = async (threadId: number) => {
-    if (!confirm(`¿Estás seguro de eliminar el Hilo ID ${threadId} de la Nube?`)) return;
+    if (!confirm(`¿Estás seguro de eliminar el Hilo ID #${threadId} de la Nube y todas sus palabras clave vinculadas?`)) return;
 
     try {
       const res = await fetch(`/api/dashboard/topics?thread_id=${threadId}`, {
@@ -127,9 +137,37 @@ export default function TopicsManager({ config, onSaveConfig }: TopicsManagerPro
     }
   };
 
-  const filteredTopics = topics.filter(t => 
-    t.identifier.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    String(t.thread_id).includes(searchTerm)
+  // Agrupar registros por Thread ID para no saturar la vista
+  const groupedMap = new Map<number, GroupedTopic>();
+
+  topics.forEach(item => {
+    if (!groupedMap.has(item.thread_id)) {
+      groupedMap.set(item.thread_id, {
+        thread_id: item.thread_id,
+        mainTitle: item.identifier,
+        aliases: [item.identifier],
+        created_at: item.created_at
+      });
+    } else {
+      const existing = groupedMap.get(item.thread_id)!;
+      if (!existing.aliases.includes(item.identifier)) {
+        existing.aliases.push(item.identifier);
+      }
+      // Priorizar títulos principales que tengan el ícono de auto 🚗 o que sean más completos
+      if (item.identifier.startsWith('🚗') && !existing.mainTitle.startsWith('🚗')) {
+        existing.mainTitle = item.identifier;
+      } else if (item.identifier.length > existing.mainTitle.length && !existing.mainTitle.startsWith('🚗')) {
+        existing.mainTitle = item.identifier;
+      }
+    }
+  });
+
+  const groupedTopicsList = Array.from(groupedMap.values());
+
+  const filteredGroupedTopics = groupedTopicsList.filter(g => 
+    g.mainTitle.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    String(g.thread_id).includes(searchTerm) ||
+    g.aliases.some(a => a.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   return (
@@ -189,16 +227,16 @@ export default function TopicsManager({ config, onSaveConfig }: TopicsManagerPro
         </div>
       </div>
 
-      {/* 2. DIRECTORIO DE HILOS/TOPICS CREADOS */}
+      {/* 2. DIRECTORIO DE HILOS/TOPICS CREADOS (AGRUPADOS POR THREAD ID) */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 shadow-xl space-y-4">
         
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-zinc-800 pb-3">
           <div>
             <h3 className="font-bold text-sm text-zinc-100 flex items-center gap-2">
               <Cloud className="w-4 h-4 text-blue-400" />
-              Directorio de Hilos / Topics Creados en la Nube
+              Directorio de Hilos de la Nube (Agrupadados por Vehículo)
             </h3>
-            <p className="text-xs text-zinc-400">Listado completo de vehículos vinculados con sus Thread IDs de Telegram.</p>
+            <p className="text-xs text-zinc-400">Listado simplificado por Hilo ID. Haz clic para desplegar los términos de búsqueda vinculados.</p>
           </div>
 
           <button
@@ -217,7 +255,7 @@ export default function TopicsManager({ config, onSaveConfig }: TopicsManagerPro
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Buscar por vehículo, orden o Thread ID..."
+            placeholder="Buscar por vehículo, orden, alias o Thread ID..."
             className="bg-transparent border-none outline-none text-xs text-zinc-200 placeholder-zinc-500 flex-1"
           />
           <button onClick={fetchTopics} className="text-zinc-400 hover:text-zinc-200 p-1">
@@ -274,44 +312,100 @@ export default function TopicsManager({ config, onSaveConfig }: TopicsManagerPro
           </form>
         )}
 
-        {/* Tabla de Hilos */}
-        <div className="overflow-x-auto">
+        {/* Tabla Agrupada de Hilos */}
+        <div className="overflow-x-auto rounded-xl border border-zinc-800">
           <table className="w-full text-left text-xs">
             <thead>
-              <tr className="border-b border-zinc-800 text-zinc-400 uppercase text-[10px] tracking-wider bg-zinc-950/60">
-                <th className="p-3">Vehículo / Identificador</th>
-                <th className="p-3">Thread ID (Telegram)</th>
-                <th className="p-3">Fecha Registro</th>
+              <tr className="border-b border-zinc-800 text-zinc-400 uppercase text-[10px] tracking-wider bg-zinc-950/80">
+                <th className="p-3">Vehículo Principal</th>
+                <th className="p-3">Hilo ID (Telegram)</th>
+                <th className="p-3">Claves de Vinculación</th>
                 <th className="p-3 text-right">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-800/60">
-              {filteredTopics.map((item, idx) => (
-                <tr key={`${item.thread_id}_${idx}`} className="hover:bg-zinc-950/40 transition">
-                  <td className="p-3 font-semibold text-zinc-200">
-                    {item.identifier}
-                  </td>
-                  <td className="p-3 font-mono text-blue-400">
-                    <span className="bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded">
-                      #{item.thread_id}
-                    </span>
-                  </td>
-                  <td className="p-3 text-zinc-400 font-mono text-[11px]">
-                    {item.created_at ? new Date(item.created_at).toLocaleString() : 'Registrado'}
-                  </td>
-                  <td className="p-3 text-right">
-                    <button
-                      onClick={() => handleDeleteTopic(item.thread_id)}
-                      className="text-rose-400 hover:bg-rose-950/50 p-1.5 rounded-lg transition"
-                      title="Eliminar Hilo"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {filteredGroupedTopics.map((group) => {
+                const isExpanded = expandedThreadId === group.thread_id;
+                const secondaryAliases = group.aliases.filter(a => a !== group.mainTitle);
 
-              {filteredTopics.length === 0 && !loading && (
+                return (
+                  <React.Fragment key={group.thread_id}>
+                    <tr className="hover:bg-zinc-950/60 transition cursor-pointer" onClick={() => setExpandedThreadId(isExpanded ? null : group.thread_id)}>
+                      <td className="p-3 font-bold text-zinc-100 flex items-center gap-2">
+                        <span>{group.mainTitle}</span>
+                      </td>
+
+                      <td className="p-3 font-mono text-blue-400">
+                        <span className="bg-blue-500/10 border border-blue-500/20 px-2.5 py-1 rounded-lg font-bold">
+                          #{group.thread_id}
+                        </span>
+                      </td>
+
+                      <td className="p-3">
+                        {secondaryAliases.length > 0 ? (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setExpandedThreadId(isExpanded ? null : group.thread_id);
+                            }}
+                            className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[11px] px-2.5 py-1 rounded-lg flex items-center gap-1.5 font-medium transition"
+                          >
+                            <Tag className="w-3 h-3 text-blue-400" />
+                            {secondaryAliases.length} palabras secundarias
+                            {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                          </button>
+                        ) : (
+                          <span className="text-zinc-500 text-[11px]">Única clave principal</span>
+                        )}
+                      </td>
+
+                      <td className="p-3 text-right">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteTopic(group.thread_id);
+                          }}
+                          className="text-rose-400 hover:bg-rose-950/50 p-1.5 rounded-lg transition"
+                          title="Eliminar Hilo Completo"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+
+                    {/* Fila Desplegable con los Términos Secundarios */}
+                    {isExpanded && secondaryAliases.length > 0 && (
+                      <tr className="bg-zinc-950/80 border-b border-zinc-800">
+                        <td colSpan={4} className="p-3 pl-8">
+                          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 space-y-2">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 block flex items-center gap-1.5">
+                              <Tag className="w-3 h-3 text-blue-400" />
+                              Términos de búsqueda que redirigen a este Hilo #{group.thread_id}:
+                            </span>
+
+                            <div className="flex flex-wrap gap-2">
+                              {group.aliases.map((alias, aIdx) => (
+                                <span 
+                                  key={aIdx} 
+                                  className={`text-[11px] px-2.5 py-1 rounded-md font-mono ${
+                                    alias === group.mainTitle
+                                      ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30 font-bold'
+                                      : 'bg-zinc-800 text-zinc-300 border border-zinc-700'
+                                  }`}
+                                >
+                                  {alias}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                );
+              })}
+
+              {filteredGroupedTopics.length === 0 && !loading && (
                 <tr>
                   <td colSpan={4} className="p-8 text-center text-zinc-500">
                     No hay hilos o temas registrados en el sistema.
