@@ -1,5 +1,8 @@
 'use client';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 import React, { useState, useEffect } from 'react';
 import { SopRecord, SopTemplate, Jornada } from '@/lib/dashboard-db';
 import DashboardOverview from '@/components/DashboardOverview';
