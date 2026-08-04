@@ -1,8 +1,5 @@
 'use client';
 
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
-
 import React, { useState, useEffect } from 'react';
 import { SopRecord, SopTemplate, Jornada } from '@/lib/dashboard-db';
 import DashboardOverview from '@/components/DashboardOverview';
@@ -14,7 +11,7 @@ import ModulesManager from '@/components/ModulesManager';
 import ChatWidget from '@/components/ChatWidget';
 import DVIManager from '@/components/DVIManager';
 import TopicsManager from '@/components/TopicsManager';
-import { DviReport } from '@/lib/dvi-store';
+import { DviReport } from '@/lib/dvi-types';
 import { 
   LayoutDashboard, 
   Clock, 

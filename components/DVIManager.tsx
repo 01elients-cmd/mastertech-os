@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { DviReport, DviItem, DEFAULT_DVI_ITEMS } from '@/lib/dvi-store';
+import { DviReport, DviItem, DEFAULT_DVI_ITEMS } from '@/lib/dvi-types';
 import { 
   Plus, 
   Search, 
