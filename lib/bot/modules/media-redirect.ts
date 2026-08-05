@@ -1,7 +1,7 @@
 import type { Context } from 'telegraf';
 import { FORUM_THREADS } from '../constants';
 import { extractOrderAndVehicle } from './intake-validator';
-import { findExistingThreadId, saveVehicleTopic } from '../topic-store';
+import { findExistingThreadId } from '../topic-store';
 import { fmt } from '../formatter';
 
 interface UserActiveVehicleSession {
@@ -12,7 +12,7 @@ interface UserActiveVehicleSession {
   timestamp: number;
 }
 
-// Memoria de vehículo activo por usuario de Telegram (expira a los 3 minutos para evitar envíos cruzados)
+// Memoria de vehículo activo por usuario de Telegram (expira a los 3 minutos)
 const userActiveSessions = new Map<number, UserActiveVehicleSession>();
 
 // Limpiar sesiones inactivas de más de 3 minutos
@@ -25,9 +25,6 @@ setInterval(() => {
   }
 }, 60 * 1000);
 
-/**
- * Permite establecer el vehículo activo del usuario al ejecutar comandos o iniciar ingresos
- */
 export function setActiveUserVehicleSession(userId: number, threadId: number, topicTitle: string, orden?: string, vehiculo?: string) {
   userActiveSessions.set(userId, {
     threadId,
@@ -52,31 +49,30 @@ export async function handleMediaRedirect(ctx: Context): Promise<void> {
   // 1. Si el mensaje trae texto, extraemos la Orden, VIN, Placa o Vehículo
   if (textContent.trim()) {
     const parsed = extractOrderAndVehicle(textContent);
-    if (parsed.orden || parsed.vehiculo || parsed.vin) {
-      threadId = await obtenerHiloDestino(ctx, parsed);
+    if (parsed.orden || parsed.vehiculo || parsed.vin || parsed.placa) {
+      threadId = await findExistingThreadId(parsed.orden, parsed.vehiculo, parsed.topicTitle, parsed.vin, parsed.placa);
       identifier = parsed.topicTitle;
 
-      // Actualizar la sesión activa del usuario para futuros envíos sin texto
       if (userId && threadId) {
         setActiveUserVehicleSession(userId, threadId, parsed.topicTitle, parsed.orden, parsed.vehiculo);
       }
     }
   }
 
-  // 2. Si la foto/video NO trae texto (o no tenía orden), usamos el vehículo activo de la sesión del asesor (máximo 3 min)
+  // 2. Si la foto/video NO trae orden explícita, usamos el vehículo activo de la sesión del asesor (3 min)
   if (!threadId && userId && userActiveSessions.has(userId)) {
     const activeSession = userActiveSessions.get(userId)!;
     if (Date.now() - activeSession.timestamp < 3 * 60 * 1000) {
       threadId = activeSession.threadId;
       identifier = activeSession.topicTitle;
-      activeSession.timestamp = Date.now(); // Renovar el temporizador
+      activeSession.timestamp = Date.now(); // Renovar temporizador
     }
   }
 
   const isStrict = process.env.REQUIRE_MEDIA_CAPTION === 'true';
   const isMediaMsg = 'photo' in message || 'video' in message || 'document' in message || 'voice' in message || 'audio' in message;
 
-  // 3. FLUJO DE RECHAZO Y ELIMINACIÓN (Si el formato estricto está activo y es un archivo multimedia sin orden/vehículo activo)
+  // 3. FLUJO DE RECHAZO (Si no hay un Hilo Creado previamente y el formato estricto está activo)
   if (isStrict && isMediaMsg && !threadId) {
     try {
       await ctx.deleteMessage();
@@ -86,11 +82,13 @@ export async function handleMediaRedirect(ctx: Context): Promise<void> {
 
     const currentThreadId = 'message_thread_id' in message ? (message as any).message_thread_id : undefined;
 
-    const warningNotice = `🗑️ <b>EVIDENCIA ELIMINADA POR FORMATO INCOMPLETO</b>\n\n` +
+    const warningNotice = `🗑️ <b>EVIDENCIA RECHAZADA POR FALTA DE HILO REGISTRADO</b>\n\n` +
       `👤 <b>Técnico:</b> ${username}\n` +
-      `⚠️ <b>Motivo de eliminación:</b> La opción de <i>Formato Estricto en Fotos/Videos</i> está activada y el archivo no incluía la descripción.\n\n` +
-      `💡 <b>¿Cómo enviarlo correctamente?</b>\n` +
-      `Al adjuntar la foto o video, añade una descripción a la imagen indicando el número de orden con # (ej: <code>#5250</code>) o el modelo del vehículo.`;
+      `⚠️ <b>Motivo:</b> No existe un Hilo registrado en la Nube para esta orden o vehículo.\n\n` +
+      `💡 <b>¿Cómo registrar el vehículo primero?</b>\n` +
+      `• Ejecuta: <code>/crear #5250 Toyota Corolla</code>\n` +
+      `• O crea el Hilo desde el Panel Web.\n` +
+      `• Una vez creado, tus fotos se redirigirán automáticamente.`;
 
     try {
       await ctx.reply(fmt.errorMessage(warningNotice), { 
@@ -98,12 +96,12 @@ export async function handleMediaRedirect(ctx: Context): Promise<void> {
         message_thread_id: currentThreadId
       });
     } catch (e) {
-      await ctx.reply(`⚠️ ${username}, tu foto/video fue eliminada porque no incluía número de orden (#5250) o vehículo en la descripción.`);
+      await ctx.reply(`⚠️ ${username}, la foto/video fue eliminada. Registra primero el vehículo con /crear #ORDEN Nombre.`);
     }
     return;
   }
 
-  // 4. Copiar la evidencia (foto/video/álbum/texto) al Hilo correspondiente en la Nube
+  // 4. Copiar la evidencia (foto/video/álbum/texto) al Hilo EXISTENTE en la Nube (NO CREA TEMAS AUTOMÁTICOS FANTASMA)
   if (threadId) {
     try {
       await ctx.telegram.copyMessage(
@@ -117,42 +115,4 @@ export async function handleMediaRedirect(ctx: Context): Promise<void> {
       console.error(`[MediaRedirect] Error al redireccionar mensaje al Hilo ${threadId}:`, e);
     }
   }
-}
-
-async function obtenerHiloDestino(
-  ctx: Context, 
-  parsed: { orden?: string; vehiculo?: string; vin?: string; placa?: string; topicTitle: string }
-): Promise<number | null> {
-  const existingThreadId = await findExistingThreadId(parsed.orden, parsed.vehiculo, parsed.topicTitle, parsed.vin, parsed.placa);
-
-  if (existingThreadId) {
-    return existingThreadId;
-  }
-
-  if (parsed.orden || parsed.vehiculo || parsed.vin) {
-    try {
-      const nubeChatId = FORUM_THREADS.TALLER_FORO_DESTINO_ID; // -1003975478850
-      const nuevoTema = await ctx.telegram.createForumTopic(nubeChatId, parsed.topicTitle);
-      const threadId = nuevoTema.message_thread_id;
-
-      await saveVehicleTopic(threadId, parsed.topicTitle, parsed.orden, parsed.vehiculo, parsed.vin, parsed.placa);
-
-      const operacionesChatId = FORUM_THREADS.TALLER_ORIGEN_ID; // -1003940815012
-      const notifText = `☁️ *NUBE - Nuevo Hilo Creado para Evidencia*\n\n✅ *Tema:* "${parsed.topicTitle}"\n🆔 *Hilo Nube:* \`${threadId}\``;
-      try {
-        await ctx.telegram.sendMessage(operacionesChatId, notifText, { message_thread_id: 1, parse_mode: 'Markdown' });
-      } catch (e) {
-        try {
-          await ctx.telegram.sendMessage(operacionesChatId, notifText, { parse_mode: 'Markdown' });
-        } catch (errNotif) {}
-      }
-
-      return threadId;
-    } catch (e) {
-      console.error('Error creando topic en Nube:', e);
-      return null;
-    }
-  }
-
-  return null;
 }

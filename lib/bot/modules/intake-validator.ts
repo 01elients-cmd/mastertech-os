@@ -25,6 +25,16 @@ setInterval(() => {
   }
 }, 5 * 60 * 1000);
 
+const KNOWN_BRANDS = [
+  'toyota', 'chevrolet', 'ford', 'jeep', 'hyundai', 'kia', 'nissan', 'honda', 
+  'mitsubishi', 'mazda', 'dodge', 'ram', 'fiat', 'renault', 'peugeot', 'volkswagen',
+  'corolla', 'yaris', 'hilux', 'fortuner', 'kavak', 'runner', 'tacoma', 'tucson', 
+  'sportage', 'accent', 'rio', 'picanto', 'civic', 'fit', 'crv', 'sentra', 'tiida', 
+  'march', 'versa', 'silverado', 'tahoe', 'triton', 'explorer', 'fiesta', 'focus', 
+  'ka', 'f-150', 'd-max', 'l200', 'montero', 'cherokee', 'bronco', 'optra', 'aveo',
+  'spark', 'cruze', 'corsa'
+];
+
 export function extractOrderAndVehicle(text: string): { 
   orden?: string; 
   vehiculo?: string; 
@@ -41,7 +51,7 @@ export function extractOrderAndVehicle(text: string): {
   const rawPlaca = placaMatch ? placaMatch[1].trim().toUpperCase() : undefined;
 
   // Extraer Número de Orden EXCLUSIVAMENTE mediante # (ej: #5250) o palabras clave (OT-5250, Orden 5250)
-  const ordenMatch = text.match(/(?:#([a-z0-9-]+)|\b(?:orden(?:\s+de\s+(?:servicio|trabajo))?|nro(?:\s+de)?\s+orden|ot)\b[:\s#•]*([a-z0-9-]+))/i);
+  const ordenMatch = text.match(/#([a-z0-9-]+)/i) || text.match(/\b(?:orden(?:\s+de\s+(?:servicio|trabajo))?|ot)\b[:\s#•]*([a-z0-9-]+)/i);
   
   let rawOrden = '';
   if (ordenMatch) {
@@ -54,22 +64,20 @@ export function extractOrderAndVehicle(text: string): {
   let rawVehiculo = vehiculoMatch ? vehiculoMatch[1].trim() : '';
 
   if (!rawVehiculo) {
-    // Si no tiene prefijo "vehículo:", tomamos el texto relevante limpiando la orden o los tags
-    let cleanText = text;
-    if (ordenMatch) {
-      cleanText = cleanText.replace(ordenMatch[0], '');
-    }
-    if (rawVin && vinMatch) {
-      cleanText = cleanText.replace(vinMatch[0], '');
-    }
-    if (rawPlaca && placaMatch) {
-      cleanText = cleanText.replace(placaMatch[0], '');
-    }
-    
-    // Limpiar caracteres especiales iniciales
-    cleanText = cleanText.replace(/^[•#\s\d*️⃣:]+/, '').trim();
-    if (cleanText.length > 0 && cleanText.length < 40) {
-      rawVehiculo = cleanText;
+    // Si no tiene prefijo "vehículo:", solo tomamos el texto como vehículo si viene acompañado de Orden/VIN/Placa o si contiene una marca/modelo conocido
+    const lowerText = text.toLowerCase();
+    const containsKnownBrand = KNOWN_BRANDS.some(b => lowerText.includes(b));
+
+    if (ordenMatch || rawVin || rawPlaca || containsKnownBrand) {
+      let cleanText = text;
+      if (ordenMatch) cleanText = cleanText.replace(ordenMatch[0], '');
+      if (rawVin && vinMatch) cleanText = cleanText.replace(vinMatch[0], '');
+      if (rawPlaca && placaMatch) cleanText = cleanText.replace(placaMatch[0], '');
+      
+      cleanText = cleanText.replace(/^[•#\s\d*️⃣:]+/, '').trim();
+      if (cleanText.length > 0 && cleanText.length < 40) {
+        rawVehiculo = cleanText;
+      }
     }
   }
 
