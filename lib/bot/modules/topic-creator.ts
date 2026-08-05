@@ -1,6 +1,7 @@
 import type { Context } from 'telegraf';
 import { FORUM_THREADS } from '../constants';
 import { saveVehicleTopic } from '../topic-store';
+import { extractOrderAndVehicle } from './intake-validator';
 
 export async function handleCreateTopicCommand(ctx: Context): Promise<void> {
   try {
@@ -10,25 +11,26 @@ export async function handleCreateTopicCommand(ctx: Context): Promise<void> {
     const args = message.text.split(/\s+/).slice(1);
     if (args.length === 0) {
       await ctx.reply(
-        '⚠️ *Uso:* `/crear <Nombre u Orden del Vehículo>`\n\n*Ejemplo:* `/crear OT-5250 Toyota Corolla`',
+        '⚠️ *Uso:* `/crear <Orden, VIN o Nombre del Vehículo>`\n\n*Ejemplos:*\n• `/crear OT-5250 Corolla 2024`\n• `/crear VIN:1HGCR2F83HA004512 Corolla 2024`\n• `/crear OT-5250 Placa:AA890BB Corolla 2024`',
         { parse_mode: 'Markdown' }
       );
       return;
     }
 
     const rawInput = args.join(' ').trim();
-    const topicName = rawInput.startsWith('🚗') ? rawInput : `🚗 ${rawInput}`;
+    const parsed = extractOrderAndVehicle(rawInput);
+    const topicName = parsed.topicTitle;
 
-    // 1. Crear el nuevo Tema / Hilo en el Foro de la Nube (ID: -1003975478850)
-    const targetChatId = FORUM_THREADS.TALLER_FORO_DESTINO_ID; // -1003975478850
+    // 1. Crear el nuevo Tema / Hilo en el Foro de la Nube (-1003975478850)
+    const targetChatId = FORUM_THREADS.TALLER_FORO_DESTINO_ID;
     const newTopic = await ctx.telegram.createForumTopic(targetChatId, topicName);
     const threadId = newTopic.message_thread_id;
 
-    // Guardar en la base de datos híbrida (Memoria + JSON + Supabase)
-    await saveVehicleTopic(threadId, topicName, rawInput, rawInput);
+    // Guardar en la base de datos híbrida (Memoria + JSON + Supabase) con soporte VIN y Placa
+    await saveVehicleTopic(threadId, topicName, parsed.orden, parsed.vehiculo || rawInput, parsed.vin, parsed.placa);
 
     // 2. Enviar notificación al canal # General del grupo Operaciones (-1003940815012)
-    const notificationChatId = FORUM_THREADS.TALLER_ORIGEN_ID; // -1003940815012
+    const notificationChatId = FORUM_THREADS.TALLER_ORIGEN_ID;
     const notificationText = `☁️ *NUBE - Nuevo Hilo Creado*\n\n✅ *Tema:* "${newTopic.name}"\n🆔 *ID de Hilo:* \`${threadId}\`\n\n📌 *Estado:* Activo en la Nube para recibir reportes y fotos.`;
 
     try {

@@ -25,11 +25,24 @@ setInterval(() => {
   }
 }, 5 * 60 * 1000);
 
-export function extractOrderAndVehicle(text: string): { orden?: string; vehiculo?: string; topicTitle: string } {
-  const ordenMatch = text.match(/(?:#?\b(?:orden(?:\s+de\s+(?:servicio|trabajo))?|nro(?:\s+de)?\s+orden|ot)\b[:\s#•]*)([a-z0-9-]+)/i);
-  
-  let rawOrden = ordenMatch ? ordenMatch[1].trim() : '';
+export function extractOrderAndVehicle(text: string): { 
+  orden?: string; 
+  vehiculo?: string; 
+  vin?: string; 
+  placa?: string; 
+  topicTitle: string 
+} {
+  // Extraer VIN (17 caracteres alfanuméricos o patrón VIN: XXXXXX)
+  const vinMatch = text.match(/\b([A-HJ-NPR-Z0-9]{17})\b/i) || text.match(/(?:vin|chasis)[:\s•]*([a-z0-9]{6,17})/i);
+  const rawVin = vinMatch ? vinMatch[1].trim().toUpperCase() : undefined;
 
+  // Extraer Placa / Patente
+  const placaMatch = text.match(/(?:placa|patente)[:\s•]*([a-z0-9-]+)/i);
+  const rawPlaca = placaMatch ? placaMatch[1].trim().toUpperCase() : undefined;
+
+  // Extraer Número de Orden / OT
+  const ordenMatch = text.match(/(?:#?\b(?:orden(?:\s+de\s+(?:servicio|trabajo))?|nro(?:\s+de)?\s+orden|ot)\b[:\s#•]*)([a-z0-9-]+)/i);
+  let rawOrden = ordenMatch ? ordenMatch[1].trim() : '';
   rawOrden = rawOrden.replace(/^[^a-z0-9]+/i, '').trim();
 
   if (!rawOrden) {
@@ -39,6 +52,7 @@ export function extractOrderAndVehicle(text: string): { orden?: string; vehiculo
     }
   }
 
+  // Extraer Vehículo
   const vehiculoMatch = text.match(/(?:veh[íi]culo|auto|carro)[:\s•]*([^\n•]+)/i);
   let rawVehiculo = vehiculoMatch ? vehiculoMatch[1].trim() : '';
 
@@ -47,7 +61,6 @@ export function extractOrderAndVehicle(text: string): { orden?: string; vehiculo
     const indexAfterOrden = text.indexOf(fullMatchedStr) + fullMatchedStr.length;
     const remainingLine = text.substring(indexAfterOrden).split('\n')[0].trim();
     if (remainingLine) {
-      // Limpiar texto largo o comentarios adicionales
       const cleanLine = remainingLine.replace(/^[•#\s\d*️⃣]+/, '').replace(/^[:\s•]+/, '').trim();
       if (cleanLine.length < 35) {
         rawVehiculo = cleanLine;
@@ -62,13 +75,18 @@ export function extractOrderAndVehicle(text: string): { orden?: string; vehiculo
     ordenFormatted = `OT-${rawOrden.toUpperCase()}`;
   }
 
+  let vinTag = rawVin ? ` [VIN: ...${rawVin.slice(-6)}]` : '';
+  let placaTag = rawPlaca ? ` (${rawPlaca})` : '';
+
   const topicTitle = ordenFormatted && rawVehiculo 
-    ? `🚗 ${ordenFormatted} ${rawVehiculo}`
-    : (ordenFormatted ? `🚗 ${ordenFormatted}` : (rawVehiculo ? `🚗 ${rawVehiculo}` : '🚗 General'));
+    ? `🚗 ${ordenFormatted}${placaTag}${vinTag} ${rawVehiculo}`
+    : (ordenFormatted ? `🚗 ${ordenFormatted}${placaTag}${vinTag}` : (rawVehiculo ? `🚗 ${rawVehiculo}${placaTag}${vinTag}` : '🚗 General'));
 
   return {
     orden: ordenFormatted || undefined,
     vehiculo: rawVehiculo || undefined,
+    vin: rawVin,
+    placa: rawPlaca,
     topicTitle
   };
 }
@@ -94,20 +112,19 @@ export async function processIntakeValidation(ctx: Context, text: string): Promi
 
   const parsed = extractOrderAndVehicle(text);
 
-  if (!parsed.orden && !parsed.vehiculo) {
+  if (!parsed.orden && !parsed.vehiculo && !parsed.vin) {
     return false;
   }
 
-  // Verificar si la orden ya existe en el sistema
-  const existingThreadId = await findExistingThreadId(parsed.orden, parsed.vehiculo, parsed.topicTitle);
+  // Verificar si la orden, VIN o vehículo ya existe en el sistema
+  const existingThreadId = await findExistingThreadId(parsed.orden, parsed.vehiculo, parsed.topicTitle, parsed.vin, parsed.placa);
   if (existingThreadId) {
-    // Si ya existe, NO crea un tema nuevo; simplemente registra la evidencia en el hilo existente
-    console.log(`[IntakeValidator] Orden ${parsed.orden} ya existe en Hilo ID: ${existingThreadId}`);
+    console.log(`[IntakeValidator] Vehículo/Orden ${parsed.orden || parsed.vin} ya existe en Hilo ID: ${existingThreadId}`);
     return false;
   }
 
-  // Si la orden NO existe, pedir confirmación manual con botón (Evita creación automática descontrolada)
-  if (parsed.orden) {
+  // Si no existe, pedir confirmación manual con botón
+  if (parsed.orden || parsed.vin) {
     const pendingId = `confirm_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
     if (ctx.from?.id && ctx.chat?.id) {
       pendingIntakes.set(pendingId, {
@@ -121,13 +138,15 @@ export async function processIntakeValidation(ctx: Context, text: string): Promi
       });
     }
 
+    const idLabel = parsed.orden ? `Orden: ${parsed.orden}` : `VIN: ...${parsed.vin?.slice(-6)}`;
+
     await ctx.reply(
-      `📌 *DETECCIÓN DE ORDEN DE SERVICIO*\n\n🆔 *Orden:* \`${parsed.orden}\`\n🚘 *Vehículo:* \`${parsed.vehiculo || 'Sin especificar'}\`\n\n¿Deseas crear un nuevo Hilo/Topic para este vehículo en la Nube?`,
+      `📌 *DETECCIÓN DE VEHÍCULO / ORDEN*\n\n🆔 *Identificador:* \`${idLabel}\`\n🚘 *Vehículo:* \`${parsed.vehiculo || 'Sin especificar'}\`\n\n¿Deseas crear un nuevo Hilo/Topic para este vehículo en la Nube?`,
       {
         parse_mode: 'Markdown',
         reply_parameters: ctx.message?.message_id ? { message_id: ctx.message.message_id } : undefined,
         ...Markup.inlineKeyboard([
-          [Markup.button.callback(`➕ Confirmar Creación: ${parsed.orden}`, `CONFIRM_CREATE:${pendingId}`)],
+          [Markup.button.callback(`➕ Confirmar Creación`, `CONFIRM_CREATE:${pendingId}`)],
           [Markup.button.callback('✍️ Editar Orden / Vehículo', `INTAKE_MANUAL:${pendingId}`)],
           [Markup.button.callback('❌ Omitir (No Crear)', `INTAKE_CANCEL:${pendingId}`)]
         ])
@@ -140,12 +159,19 @@ export async function processIntakeValidation(ctx: Context, text: string): Promi
 }
 
 // Crea explícitamente el Topic en la Nube sólo cuando el usuario lo confirma
-export async function createIntakeTopicDirect(ctx: Context, orden: string, vehiculo: string, topicTitle: string) {
+export async function createIntakeTopicDirect(
+  ctx: Context, 
+  orden: string, 
+  vehiculo: string, 
+  topicTitle: string,
+  vin?: string,
+  placa?: string
+) {
   const nubeForumId = FORUM_THREADS.TALLER_FORO_DESTINO_ID; // -1003975478850 (Nube)
   const operacionesGroup = FORUM_THREADS.TALLER_ORIGEN_ID; // -1003940815012 (Operaciones)
 
   try {
-    const existingThreadId = await findExistingThreadId(orden, vehiculo, topicTitle);
+    const existingThreadId = await findExistingThreadId(orden, vehiculo, topicTitle, vin, placa);
 
     let threadId: number;
     if (existingThreadId) {
@@ -153,12 +179,12 @@ export async function createIntakeTopicDirect(ctx: Context, orden: string, vehic
     } else {
       const newTopic = await ctx.telegram.createForumTopic(nubeForumId, topicTitle);
       threadId = newTopic.message_thread_id;
-      await saveVehicleTopic(threadId, topicTitle, orden, vehiculo);
+      await saveVehicleTopic(threadId, topicTitle, orden, vehiculo, vin, placa);
     }
 
     await ctx.telegram.sendMessage(
       nubeForumId,
-      `📋 *Expediente de Ingreso Registrado*\n\n🚘 *Vehículo:* ${vehiculo}\n🆔 *Orden:* ${orden}\n⏱️ *Estado:* Tema activo en la Nube.`,
+      `📋 *Expediente de Ingreso Registrado*\n\n🚘 *Vehículo:* ${vehiculo}\n🆔 *Orden/ID:* ${orden || vin}\n⏱️ *Estado:* Tema activo en la Nube.`,
       { message_thread_id: threadId, parse_mode: 'Markdown' }
     );
 
@@ -186,7 +212,6 @@ async function sendNotificationWithFallback(ctx: Context, chatId: number, text: 
 }
 
 export function registerIntakeActionHandlers(bot: any) {
-  // Confirmar creación manual por botón
   bot.action(/^CONFIRM_CREATE:(.+)$/, async (ctx: any) => {
     await ctx.answerCbQuery();
     const pendingId = ctx.match[1];
@@ -197,7 +222,14 @@ export function registerIntakeActionHandlers(bot: any) {
     }
 
     const parsed = extractOrderAndVehicle(pending.originalText);
-    await createIntakeTopicDirect(ctx, parsed.orden || 'OT-NUEVO', pending.vehiculo, parsed.topicTitle);
+    await createIntakeTopicDirect(
+      ctx, 
+      parsed.orden || 'OT-NUEVO', 
+      pending.vehiculo, 
+      parsed.topicTitle, 
+      parsed.vin, 
+      parsed.placa
+    );
     pendingIntakes.delete(pendingId);
   });
 
@@ -212,7 +244,7 @@ export function registerIntakeActionHandlers(bot: any) {
 
     pending.state = 'AWAITING_MANUAL_ORDEN';
     await ctx.reply(
-      `✍️ *Por favor responde escribiendo únicamente el número de Orden o número de OT para el vehículo:* \`${pending.vehiculo}\``,
+      `✍️ *Por favor responde escribiendo el número de Orden, Placa o VIN para el vehículo:* \`${pending.vehiculo}\``,
       { parse_mode: 'Markdown' }
     );
   });
