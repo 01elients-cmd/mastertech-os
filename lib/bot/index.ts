@@ -425,7 +425,7 @@ registerIntakeActionHandlers(bot);
 // 4. MANEJO DE MEDIOS Y TEXTO
 // ==========================================
 
-bot.on(['photo', 'video', 'document'], async (ctx) => {
+bot.on(['photo', 'video', 'document', 'voice', 'audio'], async (ctx) => {
   try {
     const caption = ('caption' in ctx.message ? ctx.message.caption : '') || '';
     if (caption) {
@@ -451,6 +451,9 @@ bot.on('text', async (ctx) => {
     // Disparador Inteligente con Validación de Ingreso (Vehículo:)
     const intakeHandled = await processIntakeValidation(ctx, text);
     if (intakeHandled) return;
+
+    // Redireccionar notas de texto diagnósticas al Hilo del Vehículo en la Nube
+    await handleMediaRedirect(ctx);
 
     const handled = await handleMediaDataResponse(ctx);
     if (handled) return;
