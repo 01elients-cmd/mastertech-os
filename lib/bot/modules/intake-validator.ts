@@ -40,15 +40,26 @@ export function extractOrderAndVehicle(text: string): {
   const placaMatch = text.match(/(?:placa|patente)[:\s•]*([a-z0-9-]+)/i);
   const rawPlaca = placaMatch ? placaMatch[1].trim().toUpperCase() : undefined;
 
-  // Extraer Número de Orden / OT
-  const ordenMatch = text.match(/(?:#?\b(?:orden(?:\s+de\s+(?:servicio|trabajo))?|nro(?:\s+de)?\s+orden|ot)\b[:\s#•]*)([a-z0-9-]+)/i);
-  let rawOrden = ordenMatch ? ordenMatch[1].trim() : '';
+  // Extraer Número de Orden / OT (con prefijo explícito u orden numérica que NO sea un año)
+  const explicitOrdenMatch = text.match(/(?:#?\b(?:orden(?:\s+de\s+(?:servicio|trabajo))?|nro(?:\s+de)?\s+orden|ot)\b[:\s#•]*)([a-z0-9-]+)/i);
+  
+  let rawOrden = explicitOrdenMatch ? explicitOrdenMatch[1].trim() : '';
   rawOrden = rawOrden.replace(/^[^a-z0-9]+/i, '').trim();
 
+  // Si no se usó la palabra "orden" u "OT", buscar un número independiente de 3 a 6 dígitos
+  // PERO verificar que NO sea un año de automóvil (1980 - 2030)
   if (!rawOrden) {
-    const standaloneNumMatch = text.match(/\b([0-9]{3,6})\b/);
-    if (standaloneNumMatch) {
-      rawOrden = standaloneNumMatch[1];
+    const standaloneNumMatches = text.match(/\b([0-9]{3,6})\b/g);
+    if (standaloneNumMatches) {
+      for (const numStr of standaloneNumMatches) {
+        const numVal = parseInt(numStr, 10);
+        // Ignorar números en rango de años (1980 - 2030) a menos que vengan con prefijo explícito OT
+        if (numVal >= 1980 && numVal <= 2030) {
+          continue;
+        }
+        rawOrden = numStr;
+        break;
+      }
     }
   }
 
@@ -56,15 +67,23 @@ export function extractOrderAndVehicle(text: string): {
   const vehiculoMatch = text.match(/(?:veh[íi]culo|auto|carro)[:\s•]*([^\n•]+)/i);
   let rawVehiculo = vehiculoMatch ? vehiculoMatch[1].trim() : '';
 
-  if (!rawVehiculo && ordenMatch) {
-    const fullMatchedStr = ordenMatch[0];
-    const indexAfterOrden = text.indexOf(fullMatchedStr) + fullMatchedStr.length;
-    const remainingLine = text.substring(indexAfterOrden).split('\n')[0].trim();
-    if (remainingLine) {
-      const cleanLine = remainingLine.replace(/^[•#\s\d*️⃣]+/, '').replace(/^[:\s•]+/, '').trim();
-      if (cleanLine.length < 35) {
-        rawVehiculo = cleanLine;
-      }
+  if (!rawVehiculo) {
+    // Si no tiene prefijo "vehículo:", tomamos el texto relevante limpiando la orden explícita o los tags
+    let cleanText = text;
+    if (explicitOrdenMatch) {
+      cleanText = cleanText.replace(explicitOrdenMatch[0], '');
+    }
+    if (rawVin && vinMatch) {
+      cleanText = cleanText.replace(vinMatch[0], '');
+    }
+    if (rawPlaca && placaMatch) {
+      cleanText = cleanText.replace(placaMatch[0], '');
+    }
+    
+    // Limpiar caracteres especiales iniciales
+    cleanText = cleanText.replace(/^[•#\s\d*️⃣:]+/, '').trim();
+    if (cleanText.length > 0 && cleanText.length < 40) {
+      rawVehiculo = cleanText;
     }
   }
 
@@ -119,12 +138,12 @@ export async function processIntakeValidation(ctx: Context, text: string): Promi
   // Verificar si la orden, VIN o vehículo ya existe en el sistema
   const existingThreadId = await findExistingThreadId(parsed.orden, parsed.vehiculo, parsed.topicTitle, parsed.vin, parsed.placa);
   if (existingThreadId) {
-    console.log(`[IntakeValidator] Vehículo/Orden ${parsed.orden || parsed.vin} ya existe en Hilo ID: ${existingThreadId}`);
+    console.log(`[IntakeValidator] Vehículo/Orden ${parsed.orden || parsed.vin || parsed.vehiculo} ya existe en Hilo ID: ${existingThreadId}`);
     return false;
   }
 
   // Si no existe, pedir confirmación manual con botón
-  if (parsed.orden || parsed.vin) {
+  if (parsed.orden || parsed.vin || parsed.vehiculo) {
     const pendingId = `confirm_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
     if (ctx.from?.id && ctx.chat?.id) {
       pendingIntakes.set(pendingId, {
@@ -138,7 +157,9 @@ export async function processIntakeValidation(ctx: Context, text: string): Promi
       });
     }
 
-    const idLabel = parsed.orden ? `Orden: ${parsed.orden}` : `VIN: ...${parsed.vin?.slice(-6)}`;
+    const idLabel = parsed.orden 
+      ? `Orden: ${parsed.orden}` 
+      : (parsed.vin ? `VIN: ...${parsed.vin?.slice(-6)}` : `Vehículo: ${parsed.vehiculo}`);
 
     await ctx.reply(
       `📌 *DETECCIÓN DE VEHÍCULO / ORDEN*\n\n🆔 *Identificador:* \`${idLabel}\`\n🚘 *Vehículo:* \`${parsed.vehiculo || 'Sin especificar'}\`\n\n¿Deseas crear un nuevo Hilo/Topic para este vehículo en la Nube?`,
@@ -184,7 +205,7 @@ export async function createIntakeTopicDirect(
 
     await ctx.telegram.sendMessage(
       nubeForumId,
-      `📋 *Expediente de Ingreso Registrado*\n\n🚘 *Vehículo:* ${vehiculo}\n🆔 *Orden/ID:* ${orden || vin}\n⏱️ *Estado:* Tema activo en la Nube.`,
+      `📋 *Expediente de Ingreso Registrado*\n\n🚘 *Vehículo:* ${vehiculo}\n🆔 *Orden/ID:* ${orden || vin || vehiculo}\n⏱️ *Estado:* Tema activo en la Nube.`,
       { message_thread_id: threadId, parse_mode: 'Markdown' }
     );
 
