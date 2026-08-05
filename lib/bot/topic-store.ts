@@ -108,6 +108,20 @@ export async function findExistingThreadId(
     (orden && vehiculo) ? `${orden} ${vehiculo}` : ''
   ].filter(Boolean) as string[];
 
+  // También extraer cualquier número de 3-6 dígitos presente en vehiculo o topicTitle (ej: 1692 en Grand Cherokee 1692)
+  if (vehiculo) {
+    const numMatch = vehiculo.match(/\b([0-9]{3,6})\b/g);
+    if (numMatch) {
+      numMatch.forEach(n => {
+        const val = parseInt(n, 10);
+        if (val < 1980 || val > 2030) {
+          rawKeys.push(n);
+          rawKeys.push(`OT-${n}`);
+        }
+      });
+    }
+  }
+
   const normalizedKeys = Array.from(new Set(rawKeys.map(normalizeKey))).filter(Boolean);
 
   // 1. Buscar en Caché de Memoria
@@ -124,7 +138,7 @@ export async function findExistingThreadId(
   for (const rec of localRecords) {
     const recKey = normalizeKey(rec.identifier);
     for (const key of normalizedKeys) {
-      if (recKey.includes(key) || key.includes(recKey)) {
+      if (key.length >= 3 && (recKey.includes(key) || key.includes(recKey))) {
         memoryTopicCache.set(key, rec.thread_id);
         console.log(`[TopicStore] Hilo encontrado en JSON Local para '${key}': Thread ID ${rec.thread_id}`);
         return rec.thread_id;
@@ -202,4 +216,38 @@ export async function saveVehicleTopic(
   } catch (e) {
     console.warn('Advertencia al insertar topic en Supabase:', e);
   }
+}
+
+/**
+ * Actualiza el Título Principal y Palabras Secundarias (Alias) de un Hilo ID existente
+ */
+export async function updateVehicleTopic(threadId: number, mainTitle: string, aliases: string[]) {
+  // 1. Limpiar caché en memoria para este threadId
+  for (const [k, v] of memoryTopicCache.entries()) {
+    if (v === threadId) memoryTopicCache.delete(k);
+  }
+
+  // 2. Actualizar en JSON Local
+  let localRecords = readLocalFallback().filter(r => r.thread_id !== threadId);
+  const cleanTitle = mainTitle.startsWith('🚗') ? mainTitle : `🚗 ${mainTitle}`;
+  const allIdentifiers = Array.from(new Set([cleanTitle, ...aliases].filter(Boolean)));
+
+  for (const id of allIdentifiers) {
+    const norm = normalizeKey(id);
+    if (norm) memoryTopicCache.set(norm, threadId);
+    localRecords.push({
+      identifier: id,
+      thread_id: threadId,
+      created_at: new Date().toISOString()
+    });
+  }
+  writeLocalFallback(localRecords);
+
+  // 3. Actualizar en Supabase
+  try {
+    await supabase.from('vehicle_topics').delete().eq('thread_id', threadId);
+    for (const id of allIdentifiers) {
+      await supabase.from('vehicle_topics').insert([{ identifier: id, thread_id: threadId }]);
+    }
+  } catch (e) {}
 }

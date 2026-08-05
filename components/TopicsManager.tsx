@@ -14,7 +14,9 @@ import {
   ChevronDown,
   ChevronUp,
   Tag,
-  Car
+  Edit3,
+  X,
+  Check
 } from 'lucide-react';
 
 interface VehicleTopic {
@@ -44,6 +46,13 @@ export default function TopicsManager({ config, onSaveConfig }: TopicsManagerPro
   const [searchTerm, setSearchTerm] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [expandedThreadId, setExpandedThreadId] = useState<number | null>(null);
+
+  // Estado de edición
+  const [editingThreadId, setEditingThreadId] = useState<number | null>(null);
+  const [editMainTitle, setEditMainTitle] = useState('');
+  const [editAliases, setEditAliases] = useState<string[]>([]);
+  const [newAliasInput, setNewAliasInput] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
 
   // Formulario de creación
   const [newTitle, setNewTitle] = useState('');
@@ -105,6 +114,53 @@ export default function TopicsManager({ config, onSaveConfig }: TopicsManagerPro
     }
   };
 
+  const startEditing = (group: GroupedTopic) => {
+    setEditingThreadId(group.thread_id);
+    setEditMainTitle(group.mainTitle);
+    setEditAliases([...group.aliases]);
+    setNewAliasInput('');
+    setExpandedThreadId(group.thread_id);
+  };
+
+  const handleAddAlias = () => {
+    if (!newAliasInput.trim()) return;
+    const trimmed = newAliasInput.trim();
+    if (!editAliases.includes(trimmed)) {
+      setEditAliases([...editAliases, trimmed]);
+    }
+    setNewAliasInput('');
+  };
+
+  const handleRemoveAlias = (aliasToRemove: string) => {
+    setEditAliases(editAliases.filter(a => a !== aliasToRemove));
+  };
+
+  const handleSaveEdit = async (threadId: number) => {
+    if (!editMainTitle.trim()) return;
+    setSavingEdit(true);
+
+    try {
+      const res = await fetch('/api/dashboard/topics', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          thread_id: threadId,
+          mainTitle: editMainTitle.trim(),
+          aliases: editAliases
+        })
+      });
+
+      if (!res.ok) throw new Error('Error guardando cambios del tema');
+
+      setEditingThreadId(null);
+      fetchTopics();
+    } catch (err: any) {
+      alert(err.message || 'Error al actualizar el tema');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
   const handleDeleteTopic = async (threadId: number) => {
     if (!confirm(`¿Estás seguro de eliminar el Hilo ID #${threadId} de la Nube y todas sus palabras clave vinculadas?`)) return;
 
@@ -137,7 +193,7 @@ export default function TopicsManager({ config, onSaveConfig }: TopicsManagerPro
     }
   };
 
-  // Agrupar registros por Thread ID para no saturar la vista
+  // Agrupar registros por Thread ID
   const groupedMap = new Map<number, GroupedTopic>();
 
   topics.forEach(item => {
@@ -153,7 +209,6 @@ export default function TopicsManager({ config, onSaveConfig }: TopicsManagerPro
       if (!existing.aliases.includes(item.identifier)) {
         existing.aliases.push(item.identifier);
       }
-      // Priorizar títulos principales que tengan el ícono de auto 🚗 o que sean más completos
       if (item.identifier.startsWith('🚗') && !existing.mainTitle.startsWith('🚗')) {
         existing.mainTitle = item.identifier;
       } else if (item.identifier.length > existing.mainTitle.length && !existing.mainTitle.startsWith('🚗')) {
@@ -227,16 +282,16 @@ export default function TopicsManager({ config, onSaveConfig }: TopicsManagerPro
         </div>
       </div>
 
-      {/* 2. DIRECTORIO DE HILOS/TOPICS CREADOS (AGRUPADOS POR THREAD ID) */}
+      {/* 2. DIRECTORIO DE HILOS/TOPICS CREADOS */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 shadow-xl space-y-4">
         
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-zinc-800 pb-3">
           <div>
             <h3 className="font-bold text-sm text-zinc-100 flex items-center gap-2">
               <Cloud className="w-4 h-4 text-blue-400" />
-              Directorio de Hilos de la Nube (Agrupadados por Vehículo)
+              Directorio de Hilos de la Nube (Agrupados por Vehículo)
             </h3>
-            <p className="text-xs text-zinc-400">Listado simplificado por Hilo ID. Haz clic para desplegar los términos de búsqueda vinculados.</p>
+            <p className="text-xs text-zinc-400">Listado simplificado por Hilo ID. Puedes editar el nombre principal y gestionar palabras secundarias.</p>
           </div>
 
           <button
@@ -312,7 +367,7 @@ export default function TopicsManager({ config, onSaveConfig }: TopicsManagerPro
           </form>
         )}
 
-        {/* Tabla Agrupada de Hilos */}
+        {/* Tabla Agrupada de Hilos con Edición Integrada */}
         <div className="overflow-x-auto rounded-xl border border-zinc-800">
           <table className="w-full text-left text-xs">
             <thead>
@@ -326,6 +381,7 @@ export default function TopicsManager({ config, onSaveConfig }: TopicsManagerPro
             <tbody className="divide-y divide-zinc-800/60">
               {filteredGroupedTopics.map((group) => {
                 const isExpanded = expandedThreadId === group.thread_id;
+                const isEditing = editingThreadId === group.thread_id;
                 const secondaryAliases = group.aliases.filter(a => a !== group.mainTitle);
 
                 return (
@@ -359,7 +415,18 @@ export default function TopicsManager({ config, onSaveConfig }: TopicsManagerPro
                         )}
                       </td>
 
-                      <td className="p-3 text-right">
+                      <td className="p-3 text-right flex items-center justify-end gap-2">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            startEditing(group);
+                          }}
+                          className="text-blue-400 hover:bg-blue-950/50 p-1.5 rounded-lg transition"
+                          title="Editar Nombre y Palabras Secundarias"
+                        >
+                          <Edit3 className="w-4 h-4" />
+                        </button>
+
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -373,31 +440,126 @@ export default function TopicsManager({ config, onSaveConfig }: TopicsManagerPro
                       </td>
                     </tr>
 
-                    {/* Fila Desplegable con los Términos Secundarios */}
-                    {isExpanded && secondaryAliases.length > 0 && (
+                    {/* Fila Modo Edición / Desplegable de Palabras Secundarias */}
+                    {isExpanded && (
                       <tr className="bg-zinc-950/80 border-b border-zinc-800">
                         <td colSpan={4} className="p-3 pl-8">
-                          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 space-y-2">
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 block flex items-center gap-1.5">
-                              <Tag className="w-3 h-3 text-blue-400" />
-                              Términos de búsqueda que redirigen a este Hilo #{group.thread_id}:
-                            </span>
-
-                            <div className="flex flex-wrap gap-2">
-                              {group.aliases.map((alias, aIdx) => (
-                                <span 
-                                  key={aIdx} 
-                                  className={`text-[11px] px-2.5 py-1 rounded-md font-mono ${
-                                    alias === group.mainTitle
-                                      ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30 font-bold'
-                                      : 'bg-zinc-800 text-zinc-300 border border-zinc-700'
-                                  }`}
-                                >
-                                  {alias}
+                          {isEditing ? (
+                            /* PANEL EDICIÓN DE TÍTULO Y ALIAS */
+                            <div className="bg-zinc-900 border border-blue-500/40 rounded-xl p-4 space-y-4 shadow-xl">
+                              <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
+                                <span className="text-xs font-bold text-blue-400 flex items-center gap-1.5">
+                                  <Edit3 className="w-4 h-4" />
+                                  Editando Hilo ID #{group.thread_id}
                                 </span>
-                              ))}
+                                <button onClick={() => setEditingThreadId(null)} className="text-zinc-400 hover:text-zinc-200">
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </div>
+
+                              {/* 1. Editar Nombre Principal */}
+                              <div>
+                                <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-300 block mb-1">
+                                  Nombre Principal del Vehículo / Tema en Telegram:
+                                </label>
+                                <input
+                                  type="text"
+                                  value={editMainTitle}
+                                  onChange={(e) => setEditMainTitle(e.target.value)}
+                                  placeholder="Ej: 🚗 OT-1692 Grand Cherokee"
+                                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 outline-none focus:border-blue-500"
+                                />
+                              </div>
+
+                              {/* 2. Gestionar Palabras Secundarias (Alias) */}
+                              <div className="space-y-2">
+                                <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-300 block">
+                                  Palabras Secundarias de Búsqueda (Alias):
+                                </label>
+
+                                <div className="flex flex-wrap gap-2">
+                                  {editAliases.map((alias, aIdx) => (
+                                    <span 
+                                      key={aIdx} 
+                                      className="bg-zinc-800 text-zinc-200 border border-zinc-700 text-[11px] px-2.5 py-1 rounded-md font-mono flex items-center gap-1.5"
+                                    >
+                                      {alias}
+                                      <button 
+                                        onClick={() => handleRemoveAlias(alias)}
+                                        className="text-zinc-400 hover:text-rose-400 p-0.5"
+                                        title="Eliminar palabra clave"
+                                      >
+                                        <X className="w-3 h-3" />
+                                      </button>
+                                    </span>
+                                  ))}
+                                </div>
+
+                                <div className="flex items-center gap-2 pt-1">
+                                  <input
+                                    type="text"
+                                    value={newAliasInput}
+                                    onChange={(e) => setNewAliasInput(e.target.value)}
+                                    placeholder="Agregar palabra o número (ej: 1692, AA890BB)..."
+                                    className="bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-1.5 text-xs text-zinc-200 flex-1 outline-none focus:border-blue-500"
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        handleAddAlias();
+                                      }
+                                    }}
+                                  />
+                                  <button
+                                    onClick={handleAddAlias}
+                                    className="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs px-3 py-1.5 rounded-xl font-bold transition flex items-center gap-1"
+                                  >
+                                    <Plus className="w-3.5 h-3.5" /> Agregar
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Botones de guardar edición */}
+                              <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-800">
+                                <button
+                                  onClick={() => setEditingThreadId(null)}
+                                  className="bg-zinc-800 text-zinc-300 text-xs px-3 py-1.5 rounded-lg"
+                                >
+                                  Cancelar
+                                </button>
+                                <button
+                                  onClick={() => handleSaveEdit(group.thread_id)}
+                                  disabled={savingEdit}
+                                  className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-4 py-1.5 rounded-lg shadow flex items-center gap-1.5"
+                                >
+                                  <Check className="w-4 h-4" />
+                                  {savingEdit ? 'Guardando...' : 'Guardar Cambios'}
+                                </button>
+                              </div>
                             </div>
-                          </div>
+                          ) : (
+                            /* MODO LECTURA DESPLEGABLE */
+                            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 space-y-2">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 block flex items-center gap-1.5">
+                                <Tag className="w-3 h-3 text-blue-400" />
+                                Términos de búsqueda que redirigen a este Hilo #{group.thread_id}:
+                              </span>
+
+                              <div className="flex flex-wrap gap-2">
+                                {group.aliases.map((alias, aIdx) => (
+                                  <span 
+                                    key={aIdx} 
+                                    className={`text-[11px] px-2.5 py-1 rounded-md font-mono ${
+                                      alias === group.mainTitle
+                                        ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30 font-bold'
+                                        : 'bg-zinc-800 text-zinc-300 border border-zinc-700'
+                                    }`}
+                                  >
+                                    {alias}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </td>
                       </tr>
                     )}

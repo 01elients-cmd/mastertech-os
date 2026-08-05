@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getAllVehicleTopics, saveVehicleTopic, deleteVehicleTopic } from '@/lib/bot/topic-store';
+import { getAllVehicleTopics, saveVehicleTopic, deleteVehicleTopic, updateVehicleTopic } from '@/lib/bot/topic-store';
 
 export const dynamic = 'force-dynamic';
 
@@ -60,6 +60,41 @@ export async function POST(req: Request) {
     } catch (e) {}
 
     return NextResponse.json({ success: true, thread_id: threadId, identifier: formattedTitle });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
+
+export async function PUT(req: Request) {
+  try {
+    const { thread_id, mainTitle, aliases } = await req.json();
+    if (!thread_id || !mainTitle) {
+      return NextResponse.json({ error: 'Falta thread_id o mainTitle' }, { status: 400 });
+    }
+
+    const numericId = typeof thread_id === 'string' ? parseInt(thread_id, 10) : thread_id;
+    const token = process.env.TELEGRAM_BOT_TOKEN || '8970513614:AAGCdMrJTbIH1QmKCFXcIzv5QxPX86e_23U';
+    const nubeChatId = process.env.TALLER_FORO_DESTINO_ID || '-1003975478850';
+
+    const cleanTitle = mainTitle.startsWith('🚗') ? mainTitle : `🚗 ${mainTitle}`;
+
+    // 1. Renombrar el tema en Telegram si es posible
+    try {
+      await fetch(`https://api.telegram.org/bot${token}/editForumTopic`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: nubeChatId,
+          message_thread_id: numericId,
+          name: cleanTitle
+        })
+      });
+    } catch (e) {}
+
+    // 2. Actualizar palabras clave en la base de datos híbrida
+    await updateVehicleTopic(numericId, cleanTitle, aliases || []);
+
+    return NextResponse.json({ success: true });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }

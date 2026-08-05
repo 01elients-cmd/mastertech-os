@@ -114,11 +114,9 @@ export async function handleMediaMessage(ctx: Context): Promise<void> {
       
       const warningNotice = `🗑️ <b>EVIDENCIA ELIMINADA POR FORMATO INCOMPLETO</b>\n\n` +
         `👤 <b>Técnico:</b> ${username}\n` +
-        `⚠️ <b>Motivo de eliminación:</b> La opción de <i>Formato Estricto en Fotos/Videos</i> está activada y el archivo no incluía la Orden o el Modelo en la descripción.\n\n` +
+        `⚠️ <b>Motivo de eliminación:</b> La opción de <i>Formato Estricto en Fotos/Videos</i> está activada y el archivo no incluía la descripción.\n\n` +
         `💡 <b>¿Cómo enviarlo correctamente?</b>\n` +
-        `Al adjuntar la foto/video, escribe en la descripción:\n` +
-        `• <code>#5250 Toyota Corolla</code>\n` +
-        `• <code>#1520 Yaris 2024</code>`;
+        `Al adjuntar la foto o video, añade una descripción a la imagen indicando el número de orden (ej: <code>#5250</code>) o el vehículo.`;
 
       await ctx.reply(fmt.errorMessage(warningNotice), { 
         parse_mode: 'HTML',
