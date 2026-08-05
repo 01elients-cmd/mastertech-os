@@ -40,27 +40,13 @@ export function extractOrderAndVehicle(text: string): {
   const placaMatch = text.match(/(?:placa|patente)[:\s•]*([a-z0-9-]+)/i);
   const rawPlaca = placaMatch ? placaMatch[1].trim().toUpperCase() : undefined;
 
-  // Extraer Número de Orden / OT (con prefijo explícito u orden numérica que NO sea un año)
-  const explicitOrdenMatch = text.match(/(?:#?\b(?:orden(?:\s+de\s+(?:servicio|trabajo))?|nro(?:\s+de)?\s+orden|ot)\b[:\s#•]*)([a-z0-9-]+)/i);
+  // Extraer Número de Orden EXCLUSIVAMENTE mediante # (ej: #5250) o palabras clave (OT-5250, Orden 5250)
+  const ordenMatch = text.match(/(?:#([a-z0-9-]+)|\b(?:orden(?:\s+de\s+(?:servicio|trabajo))?|nro(?:\s+de)?\s+orden|ot)\b[:\s#•]*([a-z0-9-]+))/i);
   
-  let rawOrden = explicitOrdenMatch ? explicitOrdenMatch[1].trim() : '';
-  rawOrden = rawOrden.replace(/^[^a-z0-9]+/i, '').trim();
-
-  // Si no se usó la palabra "orden" u "OT", buscar un número independiente de 3 a 6 dígitos
-  // PERO verificar que NO sea un año de automóvil (1980 - 2030)
-  if (!rawOrden) {
-    const standaloneNumMatches = text.match(/\b([0-9]{3,6})\b/g);
-    if (standaloneNumMatches) {
-      for (const numStr of standaloneNumMatches) {
-        const numVal = parseInt(numStr, 10);
-        // Ignorar números en rango de años (1980 - 2030) a menos que vengan con prefijo explícito OT
-        if (numVal >= 1980 && numVal <= 2030) {
-          continue;
-        }
-        rawOrden = numStr;
-        break;
-      }
-    }
+  let rawOrden = '';
+  if (ordenMatch) {
+    rawOrden = (ordenMatch[1] || ordenMatch[2] || '').trim();
+    rawOrden = rawOrden.replace(/^[^a-z0-9]+/i, '').trim();
   }
 
   // Extraer Vehículo
@@ -68,10 +54,10 @@ export function extractOrderAndVehicle(text: string): {
   let rawVehiculo = vehiculoMatch ? vehiculoMatch[1].trim() : '';
 
   if (!rawVehiculo) {
-    // Si no tiene prefijo "vehículo:", tomamos el texto relevante limpiando la orden explícita o los tags
+    // Si no tiene prefijo "vehículo:", tomamos el texto relevante limpiando la orden o los tags
     let cleanText = text;
-    if (explicitOrdenMatch) {
-      cleanText = cleanText.replace(explicitOrdenMatch[0], '');
+    if (ordenMatch) {
+      cleanText = cleanText.replace(ordenMatch[0], '');
     }
     if (rawVin && vinMatch) {
       cleanText = cleanText.replace(vinMatch[0], '');
@@ -143,7 +129,7 @@ export async function processIntakeValidation(ctx: Context, text: string): Promi
   }
 
   // Si no existe, pedir confirmación manual con botón
-  if (parsed.orden || parsed.vin || parsed.vehiculo) {
+  if (parsed.orden || parsed.vin) {
     const pendingId = `confirm_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
     if (ctx.from?.id && ctx.chat?.id) {
       pendingIntakes.set(pendingId, {
