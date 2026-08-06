@@ -42,25 +42,28 @@ export async function handleMediaRedirect(ctx: Context): Promise<void> {
   const userId = ctx.from?.id;
   const username = ctx.from?.first_name || 'Técnico';
   const textContent = ('caption' in message ? message.caption : ('text' in message ? message.text : '')) || '';
+  const hasExplicitText = !!textContent.trim();
 
   let threadId: number | null = null;
   let identifier = '';
 
-  // 1. Si el mensaje trae texto, extraemos la Orden, VIN, Placa o Vehículo
-  if (textContent.trim()) {
+  // 1. Si el mensaje trae texto/caption explicito, extraemos Orden, VIN, Placa o Vehículo
+  if (hasExplicitText) {
     const parsed = extractOrderAndVehicle(textContent);
     if (parsed.orden || parsed.vehiculo || parsed.vin || parsed.placa) {
       threadId = await findExistingThreadId(parsed.orden, parsed.vehiculo, parsed.topicTitle, parsed.vin, parsed.placa);
       identifier = parsed.topicTitle;
 
+      // Si se encuentra el hilo explícito, actualizar la sesión del usuario al nuevo vehículo
       if (userId && threadId) {
         setActiveUserVehicleSession(userId, threadId, parsed.topicTitle, parsed.orden, parsed.vehiculo);
       }
     }
   }
 
-  // 2. Si la foto/video NO trae orden explícita, usamos el vehículo activo de la sesión del asesor (3 min)
-  if (!threadId && userId && userActiveSessions.has(userId)) {
+  // 2. Usar la sesión activa del usuario ÚNICAMENTE si el mensaje NO TIENE CAPTION/TEXTO
+  // (Esto evita que fotos con textos de otros vehículos como 'Corolla 1686' terminen en el hilo del auto anterior)
+  if (!threadId && !hasExplicitText && userId && userActiveSessions.has(userId)) {
     const activeSession = userActiveSessions.get(userId)!;
     if (Date.now() - activeSession.timestamp < 3 * 60 * 1000) {
       threadId = activeSession.threadId;
@@ -72,8 +75,8 @@ export async function handleMediaRedirect(ctx: Context): Promise<void> {
   const isStrict = process.env.REQUIRE_MEDIA_CAPTION === 'true';
   const isMediaMsg = 'photo' in message || 'video' in message || 'document' in message || 'voice' in message || 'audio' in message;
 
-  // 3. FLUJO DE RECHAZO (Si no hay un Hilo Creado previamente y el formato estricto está activo)
-  if (isStrict && isMediaMsg && !threadId) {
+  // 3. FLUJO DE RECHAZO (Si el mensaje traía texto de un vehículo NO REGISTRADO o si no hay orden activa)
+  if ((isStrict || hasExplicitText) && isMediaMsg && !threadId) {
     try {
       await ctx.deleteMessage();
     } catch (e) {
@@ -82,13 +85,13 @@ export async function handleMediaRedirect(ctx: Context): Promise<void> {
 
     const currentThreadId = 'message_thread_id' in message ? (message as any).message_thread_id : undefined;
 
-    const warningNotice = `🗑️ <b>EVIDENCIA RECHAZADA POR FALTA DE HILO REGISTRADO</b>\n\n` +
+    const warningNotice = `🗑️ <b>EVIDENCIA RECHAZADA POR VEHÍCULO NO REGISTRADO</b>\n\n` +
       `👤 <b>Técnico:</b> ${username}\n` +
-      `⚠️ <b>Motivo:</b> No existe un Hilo registrado en la Nube para esta orden o vehículo.\n\n` +
+      `⚠️ <b>Motivo:</b> Escribiste <i>"${textContent}"</i> pero este vehículo no tiene un Hilo activo en la Nube.\n\n` +
       `💡 <b>¿Cómo registrar el vehículo primero?</b>\n` +
-      `• Ejecuta: <code>/crear #5250 Toyota Corolla</code>\n` +
+      `• Ejecuta: <code>/crear #1686 Corolla 1686</code>\n` +
       `• O crea el Hilo desde el Panel Web.\n` +
-      `• Una vez creado, tus fotos se redirigirán automáticamente.`;
+      `• Una vez creado, tus fotos para este auto se redireccionarán automáticamente.`;
 
     try {
       await ctx.reply(fmt.errorMessage(warningNotice), { 
@@ -96,12 +99,12 @@ export async function handleMediaRedirect(ctx: Context): Promise<void> {
         message_thread_id: currentThreadId
       });
     } catch (e) {
-      await ctx.reply(`⚠️ ${username}, la foto/video fue eliminada. Registra primero el vehículo con /crear #ORDEN Nombre.`);
+      await ctx.reply(`⚠️ ${username}, el vehículo '${textContent}' no está registrado en la Nube. Regístralo con /crear #ORDEN Nombre.`);
     }
     return;
   }
 
-  // 4. Copiar la evidencia (foto/video/álbum/texto) al Hilo EXISTENTE en la Nube (NO CREA TEMAS AUTOMÁTICOS FANTASMA)
+  // 4. Copiar la evidencia (foto/video/álbum/texto) AL HILO CORRECTO en la Nube
   if (threadId) {
     try {
       await ctx.telegram.copyMessage(
