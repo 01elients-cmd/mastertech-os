@@ -1,6 +1,7 @@
 import type { Context } from 'telegraf';
 import { supabase } from '../supabase';
 import { fmt } from '../formatter';
+import { FORUM_THREADS } from '../constants';
 
 // Mapas temporales para deduplicar alertas en álbumes de varias fotos en serverless
 const albumSharedData = new Map<string, { orderNumber: string; model: string }>();
@@ -32,6 +33,26 @@ export function parseMediaCaption(caption: string) {
   return { orderNumber, model };
 }
 
+async function sendWarningToGeneral(ctx: Context, htmlText: string) {
+  const operacionesChatId = FORUM_THREADS.TALLER_ORIGEN_ID; // -1003940815012 (# General)
+  const formattedMsg = fmt.errorMessage(htmlText);
+
+  try {
+    await ctx.telegram.sendMessage(operacionesChatId, formattedMsg, {
+      parse_mode: 'HTML',
+      message_thread_id: 1
+    });
+  } catch (e) {
+    try {
+      await ctx.telegram.sendMessage(operacionesChatId, formattedMsg, {
+        parse_mode: 'HTML'
+      });
+    } catch (err2) {
+      console.error('Error enviando aviso a # General:', err2);
+    }
+  }
+}
+
 export async function handleMediaMessage(ctx: Context): Promise<void> {
   const message = ctx.message;
   if (!message) return;
@@ -58,9 +79,6 @@ export async function handleMediaMessage(ctx: Context): Promise<void> {
 
   let shouldReply = true;
 
-  // ==========================================
-  // MANEJO DE ÁLBUMES EN ENTORNO SERVERLESS
-  // ==========================================
   if (mediaGroupId) {
     if (orderNumber && model) {
       albumSharedData.set(mediaGroupId, { orderNumber, model });
@@ -102,7 +120,7 @@ export async function handleMediaMessage(ctx: Context): Promise<void> {
   }
 
   // ==========================================
-  // FLUJO DE RECHAZO (Políticas estrictas con Aviso de Eliminación)
+  // FLUJO DE RECHAZO (Avisos dirigidos a # General)
   // ==========================================
   if (isStrict && (!orderNumber || !model)) {
     if (shouldReply) {
@@ -116,12 +134,9 @@ export async function handleMediaMessage(ctx: Context): Promise<void> {
         `👤 <b>Técnico:</b> ${username}\n` +
         `⚠️ <b>Motivo de eliminación:</b> La opción de <i>Formato Estricto en Fotos/Videos</i> está activada y el archivo no incluía la descripción.\n\n` +
         `💡 <b>¿Cómo enviarlo correctamente?</b>\n` +
-        `Al adjuntar la foto o video, añade una descripción a la imagen indicando el número de orden (ej: <code>#5250</code>) o el vehículo.`;
+        `Al adjuntar la foto o video, añade una descripción a la imagen indicando el número de orden con # (ej: <code>#5250</code>) o el vehículo.`;
 
-      await ctx.reply(fmt.errorMessage(warningNotice), { 
-        parse_mode: 'HTML',
-        message_thread_id: threadId
-      });
+      await sendWarningToGeneral(ctx, warningNotice);
     }
     return;
   }

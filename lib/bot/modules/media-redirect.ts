@@ -35,6 +35,30 @@ export function setActiveUserVehicleSession(userId: number, threadId: number, to
   });
 }
 
+/**
+ * Función auxiliar para enviar todos los avisos de error y advertencia EXCLUSIVAMENTE al canal # General
+ * para no entorpecer los hilos de protocolo de los técnicos.
+ */
+async function sendWarningToGeneral(ctx: Context, htmlText: string) {
+  const operacionesChatId = FORUM_THREADS.TALLER_ORIGEN_ID; // -1003940815012 (# General)
+  const formattedMsg = fmt.errorMessage(htmlText);
+
+  try {
+    await ctx.telegram.sendMessage(operacionesChatId, formattedMsg, {
+      parse_mode: 'HTML',
+      message_thread_id: 1
+    });
+  } catch (e) {
+    try {
+      await ctx.telegram.sendMessage(operacionesChatId, formattedMsg, {
+        parse_mode: 'HTML'
+      });
+    } catch (err2) {
+      console.error('Error enviando aviso a # General:', err2);
+    }
+  }
+}
+
 export async function handleMediaRedirect(ctx: Context): Promise<void> {
   const message = ctx.message;
   if (!message || !ctx.chat) return;
@@ -54,7 +78,6 @@ export async function handleMediaRedirect(ctx: Context): Promise<void> {
       threadId = await findExistingThreadId(parsed.orden, parsed.vehiculo, parsed.topicTitle, parsed.vin, parsed.placa);
       identifier = parsed.topicTitle;
 
-      // Si se encuentra el hilo explícito, actualizar la sesión del usuario al nuevo vehículo
       if (userId && threadId) {
         setActiveUserVehicleSession(userId, threadId, parsed.topicTitle, parsed.orden, parsed.vehiculo);
       }
@@ -62,7 +85,6 @@ export async function handleMediaRedirect(ctx: Context): Promise<void> {
   }
 
   // 2. Usar la sesión activa del usuario ÚNICAMENTE si el mensaje NO TIENE CAPTION/TEXTO
-  // (Esto evita que fotos con textos de otros vehículos como 'Corolla 1686' terminen en el hilo del auto anterior)
   if (!threadId && !hasExplicitText && userId && userActiveSessions.has(userId)) {
     const activeSession = userActiveSessions.get(userId)!;
     if (Date.now() - activeSession.timestamp < 3 * 60 * 1000) {
@@ -75,15 +97,13 @@ export async function handleMediaRedirect(ctx: Context): Promise<void> {
   const isStrict = process.env.REQUIRE_MEDIA_CAPTION === 'true';
   const isMediaMsg = 'photo' in message || 'video' in message || 'document' in message || 'voice' in message || 'audio' in message;
 
-  // 3. FLUJO DE RECHAZO (Si el mensaje traía texto de un vehículo NO REGISTRADO o si no hay orden activa)
+  // 3. FLUJO DE RECHAZO (Enviar aviso EXCLUSIVAMENTE a # General para mantener limpios los sub-temas)
   if ((isStrict || hasExplicitText) && isMediaMsg && !threadId) {
     try {
       await ctx.deleteMessage();
     } catch (e) {
       console.warn('No se pudo borrar el mensaje (posiblemente el bot no es administrador):', e);
     }
-
-    const currentThreadId = 'message_thread_id' in message ? (message as any).message_thread_id : undefined;
 
     const warningNotice = `🗑️ <b>EVIDENCIA RECHAZADA POR VEHÍCULO NO REGISTRADO</b>\n\n` +
       `👤 <b>Técnico:</b> ${username}\n` +
@@ -93,14 +113,7 @@ export async function handleMediaRedirect(ctx: Context): Promise<void> {
       `• O crea el Hilo desde el Panel Web.\n` +
       `• Una vez creado, tus fotos para este auto se redireccionarán automáticamente.`;
 
-    try {
-      await ctx.reply(fmt.errorMessage(warningNotice), { 
-        parse_mode: 'HTML',
-        message_thread_id: currentThreadId
-      });
-    } catch (e) {
-      await ctx.reply(`⚠️ ${username}, el vehículo '${textContent}' no está registrado en la Nube. Regístralo con /crear #ORDEN Nombre.`);
-    }
+    await sendWarningToGeneral(ctx, warningNotice);
     return;
   }
 
