@@ -36,10 +36,9 @@ export function setActiveUserVehicleSession(userId: number, threadId: number, to
 }
 
 /**
- * Función auxiliar para enviar todos los avisos de error y advertencia EXCLUSIVAMENTE al canal # General
- * para no entorpecer los hilos de protocolo de los técnicos.
+ * Función auxiliar para enviar avisos informativos a # General sin eliminar mensajes.
  */
-async function sendWarningToGeneral(ctx: Context, htmlText: string) {
+async function sendNoticeToGeneral(ctx: Context, htmlText: string) {
   const operacionesChatId = FORUM_THREADS.TALLER_ORIGEN_ID; // -1003940815012 (# General)
   const formattedMsg = fmt.errorMessage(htmlText);
 
@@ -94,27 +93,19 @@ export async function handleMediaRedirect(ctx: Context): Promise<void> {
     }
   }
 
-  const isStrict = process.env.REQUIRE_MEDIA_CAPTION === 'true';
   const isMediaMsg = 'photo' in message || 'video' in message || 'document' in message || 'voice' in message || 'audio' in message;
 
-  // 3. FLUJO DE RECHAZO (Enviar aviso EXCLUSIVAMENTE a # General para mantener limpios los sub-temas)
-  if ((isStrict || hasExplicitText) && isMediaMsg && !threadId) {
-    try {
-      await ctx.deleteMessage();
-    } catch (e) {
-      console.warn('No se pudo borrar el mensaje (posiblemente el bot no es administrador):', e);
-    }
-
-    const warningNotice = `🗑️ <b>EVIDENCIA RECHAZADA POR VEHÍCULO NO REGISTRADO</b>\n\n` +
+  // 3. SI EL VEHÍCULO NO ESTÁ REGISTRADO EN LA NUBE: NO se elimina la foto/video. Solo se notifica en # General.
+  if (hasExplicitText && isMediaMsg && !threadId) {
+    const warningNotice = `⚠️ <b>AVISO DE EVIDENCIA RECIBIDA</b>\n\n` +
       `👤 <b>Técnico:</b> ${username}\n` +
-      `⚠️ <b>Motivo:</b> Escribiste <i>"${textContent}"</i> pero este vehículo no tiene un Hilo activo en la Nube.\n\n` +
-      `💡 <b>¿Cómo registrar el vehículo primero?</b>\n` +
-      `• Ejecuta: <code>/crear #1686 Corolla 1686</code>\n` +
-      `• O crea el Hilo desde el Panel Web.\n` +
-      `• Una vez creado, tus fotos para este auto se redireccionarán automáticamente.`;
+      `📌 <b>Texto:</b> <i>"${textContent}"</i>\n` +
+      `ℹ️ <b>Nota:</b> La foto/video fue conservada en el grupo, pero este vehículo aún no tiene un Hilo registrado en la Nube.\n\n` +
+      `💡 <b>Para enviarla a la Nube automáticamente:</b>\n` +
+      `• Ejecuta: <code>/crear #ORDEN NombreVehiculo</code>\n` +
+      `• O crea el Hilo desde el Panel Web.`;
 
-    await sendWarningToGeneral(ctx, warningNotice);
-    return;
+    await sendNoticeToGeneral(ctx, warningNotice);
   }
 
   // 4. Copiar la evidencia (foto/video/álbum/texto) AL HILO CORRECTO en la Nube

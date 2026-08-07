@@ -33,26 +33,6 @@ export function parseMediaCaption(caption: string) {
   return { orderNumber, model };
 }
 
-async function sendWarningToGeneral(ctx: Context, htmlText: string) {
-  const operacionesChatId = FORUM_THREADS.TALLER_ORIGEN_ID; // -1003940815012 (# General)
-  const formattedMsg = fmt.errorMessage(htmlText);
-
-  try {
-    await ctx.telegram.sendMessage(operacionesChatId, formattedMsg, {
-      parse_mode: 'HTML',
-      message_thread_id: 1
-    });
-  } catch (e) {
-    try {
-      await ctx.telegram.sendMessage(operacionesChatId, formattedMsg, {
-        parse_mode: 'HTML'
-      });
-    } catch (err2) {
-      console.error('Error enviando aviso a # General:', err2);
-    }
-  }
-}
-
 export async function handleMediaMessage(ctx: Context): Promise<void> {
   const message = ctx.message;
   if (!message) return;
@@ -74,7 +54,6 @@ export async function handleMediaMessage(ctx: Context): Promise<void> {
   const username = ctx.from?.first_name || 'Técnico';
   let { orderNumber, model } = parseMediaCaption(caption);
 
-  const isStrict = process.env.REQUIRE_MEDIA_CAPTION === 'true';
   const mediaGroupId = (message as any).media_group_id as string | undefined;
 
   let shouldReply = true;
@@ -120,29 +99,7 @@ export async function handleMediaMessage(ctx: Context): Promise<void> {
   }
 
   // ==========================================
-  // FLUJO DE RECHAZO (Avisos dirigidos a # General)
-  // ==========================================
-  if (isStrict && (!orderNumber || !model)) {
-    if (shouldReply) {
-      try {
-        await ctx.deleteMessage();
-      } catch (e) {
-        console.warn('No se pudo borrar el mensaje (posiblemente el bot no es administrador):', e);
-      }
-      
-      const warningNotice = `🗑️ <b>EVIDENCIA ELIMINADA POR FORMATO INCOMPLETO</b>\n\n` +
-        `👤 <b>Técnico:</b> ${username}\n` +
-        `⚠️ <b>Motivo de eliminación:</b> La opción de <i>Formato Estricto en Fotos/Videos</i> está activada y el archivo no incluía la descripción.\n\n` +
-        `💡 <b>¿Cómo enviarlo correctamente?</b>\n` +
-        `Al adjuntar la foto o video, añade una descripción a la imagen indicando el número de orden con # (ej: <code>#5250</code>) o el vehículo.`;
-
-      await sendWarningToGeneral(ctx, warningNotice);
-    }
-    return;
-  }
-
-  // ==========================================
-  // GUARDADO Y CONFIRMACIÓN
+  // GUARDADO Y REGISTRO EN BASE DE DATOS (NUNCA BORRA MENSAJES)
   // ==========================================
   await saveMedia(fileId, fileType, caption, threadId, userId, username, orderNumber, model);
   
@@ -158,15 +115,6 @@ export async function handleMediaMessage(ctx: Context): Promise<void> {
         fileType: displayType,
         count: 1
       }), { 
-        parse_mode: 'HTML', 
-        reply_parameters: { message_id: message.message_id } 
-      });
-    } else {
-      const msg = mediaGroupId 
-        ? `✅ <b>Álbum recibido</b> sin orden asignada.` 
-        : `✅ <b>Evidencia recibida</b> sin orden asignada.`;
-        
-      await ctx.reply(msg, { 
         parse_mode: 'HTML', 
         reply_parameters: { message_id: message.message_id } 
       });
